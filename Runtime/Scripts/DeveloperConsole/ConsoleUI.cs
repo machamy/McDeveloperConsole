@@ -253,8 +253,8 @@ namespace Machamy.DeveloperConsole
                 if (!IsOpen) return;
                 textField.Focus();
                 OnTextChanged(CurrentInput);
-                // UpdatePreviewContainer();
-            });
+                
+            }).ExecuteLater(5);
         }
 
         public void Close()
