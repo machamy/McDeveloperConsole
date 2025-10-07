@@ -1,7 +1,7 @@
 # Mc Developer Console
 
 [![Unity Version](https://img.shields.io/badge/Unity-2022.3%20LTS-blue.svg)](https://unity3d.com/get-unity/download)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-BSD--2--Clause-blue)](LICENSE)
 [![Package Version](https://img.shields.io/badge/Version-1.0.1-orange.svg)](package.json)
 
 A comprehensive in-game developer console for Unity with UI Toolkit support, auto-completion, command system, and customizable UI.
