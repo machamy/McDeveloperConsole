@@ -1,0 +1,15 @@
+{
+  "name": "com.macham.developerconsole",
+  "version": "1.0.0",
+  "displayName": "McDeveloperConsole",
+  "description": "A simple in-game developer console for Unity. 간단한 게임 내 개발자 콘솔입니다.",
+  "unity": "6000.0",
+  "dependencies": {
+    
+  },
+  "keywords": ["DevConsole", "DeveloperConsole", "Console"],
+  "author": {
+    "name": "macham",
+    "email": "macham2001@gmail.com"
+  }
+}
