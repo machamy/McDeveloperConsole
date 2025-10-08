@@ -29,6 +29,7 @@ namespace Machamy.DeveloperConsole
         [SerializeField] private bool _useAutoComplete = false;
         [SerializeField] private bool autoScrollToBottomOnNewMessage = true;
         [SerializeField] private bool autoScrollToBottomOnNewPrint = true;
+        [SerializeField] private bool useResolutionWatcher = true;
         [Header("Binding Config")]
         [SerializeField] InputAction _toggleConsoleAction;
         // [SerializeField] InputAction _autoCompleteConsoleAction;
@@ -143,20 +144,36 @@ namespace Machamy.DeveloperConsole
             {
                 eastManipulator.MinSize = southManipulator.MinSize = southEastManipulator.MinSize = min;
                 eastManipulator.MaxSize = southManipulator.MaxSize = southEastManipulator.MaxSize = max;
+                southEastManipulator.Clamp();
             }
             SetResizeMinMaxSize(minSize, maxSize);
             eastManipulator.ClampToParentBounds = southManipulator.ClampToParentBounds = southEastManipulator.ClampToParentBounds = true;
             
-            var resolutionChangeWatcher = ResolutionWatcher.Instance;
-            if (resolutionChangeWatcher != null)
+            if(useResolutionWatcher)
             {
-                resolutionChangeWatcher.OnResolutionChanged += (newSize) =>
+                T AddOrGetComponent<T>(GameObject obj) where T : Component
                 {
-                    SetResizeMinMaxSize(
-                        new Vector2(Mathf.Min(minSize.x, newSize.x), Mathf.Min(minSize.y, newSize.y)),
-                        new Vector2(Mathf.Min(maxSize.x, newSize.x), Mathf.Min(maxSize.y, newSize.y))
-                    );
-                };
+                    var comp = obj.GetComponent<T>();
+                    if (comp == null)
+                    {
+                        comp = obj.AddComponent<T>();
+                    }
+
+                    return comp;
+                }
+
+                var resolutionChangeWatcher =
+                    useResolutionWatcher ? AddOrGetComponent<ResolutionWatcher>(this.gameObject) : null;
+                if (resolutionChangeWatcher != null)
+                {
+                    resolutionChangeWatcher.OnResolutionChanged += (newSize) =>
+                    {
+                        SetResizeMinMaxSize(
+                            new Vector2(Mathf.Min(minSize.x, newSize.x), Mathf.Min(minSize.y, newSize.y)),
+                            new Vector2(Mathf.Min(maxSize.x, newSize.x), Mathf.Min(maxSize.y, newSize.y))
+                        );
+                    };
+                }
             }
             
             resizeEast.AddManipulator(eastManipulator);
@@ -524,6 +541,17 @@ namespace Machamy.DeveloperConsole
         }
         
         /// <summary>
+        /// Set Font Size
+        /// </summary>
+        /// <param name="sizeType">0: Small, 1: Medium, 2: Large, 3: Larger</param>
+        public void SetUISize(int sizeType)
+        {
+            if (!IsInitialized)
+                return;
+            
+        }
+        
+        /// <summary>
         /// Called when the user submits the input (e.g., presses Enter).
         /// </summary>
         /// <param name="input"></param>
@@ -668,7 +696,7 @@ namespace Machamy.DeveloperConsole
             McConsole.MessageInfo($"Auto scroll to bottom on new message is now {(Instance.autoScrollToBottomOnNewMessage ? "enabled" : "disabled")}");
         }
 
-        [Preserve, ConsoleCommand("setOpacity",  "Sets the console opacity (0.0 to 1.0)", "setOpacity <value>", new string[] {"0.0", "0.5","0.75", "0.95", "1.0"})]
+        [Preserve, ConsoleCommand("setOpacity",  "Sets the console opacity (0.0 to 1.0)", "setOpacity <value>", new string[] {"0.2","0.5","0.75", "0.95", "1.0"})]
         private static void SetOpacityCommand(float opacity)
         {
             var clamped = Mathf.Clamp01(opacity);

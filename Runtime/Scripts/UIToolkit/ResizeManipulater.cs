@@ -89,6 +89,22 @@ namespace Machamy.UIToolkit
             evt.StopPropagation();
         }
 
+        public void Clamp()
+        {
+            float newW = Mathf.Clamp(_panel.resolvedStyle.width, MinSize.x, MaxSize.x);
+            float newH = Mathf.Clamp(_panel.resolvedStyle.height, MinSize.y, MaxSize.y);
+
+            if (ClampToParentBounds && _panel.parent != null)
+            {
+                var parent = _panel.parent.contentRect.size;
+                newW = Mathf.Min(newW, parent.x);
+                newH = Mathf.Min(newH, parent.y);
+            }
+
+            _panel.style.width = newW;
+            _panel.style.height = newH;
+        }
+
         private void OnPointerUp(PointerUpEvent evt)
         {
             if (!_active) return;
