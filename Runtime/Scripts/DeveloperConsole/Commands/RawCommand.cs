@@ -13,6 +13,7 @@ namespace Machamy.DeveloperConsole.Commands
     /// </summary>
     public class RawCommand : IConsoleCommand
     {
+        
         public string Command { get; }
         public string Description { get; }
         private string _signature;

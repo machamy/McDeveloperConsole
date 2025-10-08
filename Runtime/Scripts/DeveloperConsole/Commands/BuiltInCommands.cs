@@ -13,6 +13,7 @@ namespace Machamy.DeveloperConsole
     /// </summary>
     public static class BuiltInCommands
     {
+#if !DO_NOT_USE_DEBUG_CONSOLE
          /// <summary>
         /// (eng) A built-in 'help' command that lists all registered commands or provides details for a specific command.<br/>
         /// (kor) 등록된 모든 명령어를 나열하거나 특정 명령어에 대한 세부 정보를 제공하는 내장 'help' 명령어입니다.
@@ -157,5 +158,6 @@ namespace Machamy.DeveloperConsole
             CommandLibrary.RegisterCommand(helpCommand);
             CommandLibrary.RegisterCommand(help2Command);
         }
+        #endif
     }
 }

@@ -1,6 +1,6 @@
 {
   "name": "com.machamy.developerconsole",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "displayName": "Mc Developer Console",
   "description": "A comprehensive in-game developer console for Unity with UI Toolkit support, auto-completion, command system, and customizable UI. Unity UI Toolkit을 사용한 포괄적인 게임 내 개발자 콘솔입니다.",
   "unity": "2022.3",

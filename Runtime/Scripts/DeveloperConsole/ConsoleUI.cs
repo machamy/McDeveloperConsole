@@ -632,7 +632,7 @@ namespace Machamy.DeveloperConsole
         {
             Toggle();
         }
-        
+#if !DO_NOT_USE_DEBUG_CONSOLE
         [Preserve, ConsoleCommand("printAllLogTypes", "Print all log types for testing purposes")]
         private static void PrintAllLogTypesCommand()
         {
@@ -675,5 +675,6 @@ namespace Machamy.DeveloperConsole
             Instance.SetOpacity(clamped);
             McConsole.MessageInfo($"Console opacity set to {clamped}");
         }
+#endif
     }
 }
