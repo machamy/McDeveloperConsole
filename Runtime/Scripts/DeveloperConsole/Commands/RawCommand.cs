@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+#if MCDEVCONSOLE_USE_NGO
+using Machamy.DeveloperConsole;
+#endif
 
 
 namespace Machamy.DeveloperConsole.Commands
@@ -20,24 +23,41 @@ namespace Machamy.DeveloperConsole.Commands
         
         private readonly Action<string[]> _action;
         private Action<string[], List<string>> AutoCompleteAction { get;}
+#if MCDEVCONSOLE_USE_NGO
+        public ConsoleCommandScope Scope { get; }
+#endif
         
         public string Signature => _signature;
         
+#if MCDEVCONSOLE_USE_NGO
+        public RawCommand(string command, string description, Action<string[]> action, string signature = null, Action<string[], List<string>> autoCompleteAction = null, ConsoleCommandScope scope = ConsoleCommandScope.Local)
+#else
         public RawCommand(string command, string description, Action<string[]> action, string signature = null, Action<string[], List<string>> autoCompleteAction = null)
+#endif
         {
             Command = command;
             Description = description;
             _action = action;
             _signature = signature ?? $"{command} <string[] args>";
             AutoCompleteAction = autoCompleteAction;
+#if MCDEVCONSOLE_USE_NGO
+            Scope = scope;
+#endif
         }
+#if MCDEVCONSOLE_USE_NGO
+        public RawCommand(string command, string description, string signature, Action<string[]> action, Action<string[], List<string>> autoCompleteAction = null, ConsoleCommandScope scope = ConsoleCommandScope.Local)
+#else
         public RawCommand(string command, string description, string signature, Action<string[]> action, Action<string[], List<string>> autoCompleteAction = null)
+#endif
         {
             Command = command;
             Description = description;
             _action = action;
             _signature = signature;
             AutoCompleteAction = autoCompleteAction;
+#if MCDEVCONSOLE_USE_NGO
+            Scope = scope;
+#endif
         }
         public void Execute(string[] args)
         {

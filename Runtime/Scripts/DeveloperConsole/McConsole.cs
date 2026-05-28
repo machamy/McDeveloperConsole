@@ -1,4 +1,4 @@
-﻿using Machamy.Utils;
+using Machamy.Utils;
 using System;
 using System.Collections.Generic;
 using Machamy.DeveloperConsole.Commands;
@@ -8,6 +8,35 @@ using UnityEngine.Scripting;
 
 namespace Machamy.DeveloperConsole
 {
+    public readonly struct ConsoleOutputMessage
+    {
+        public ConsoleOutputMessage(MessageType type, string message)
+        {
+            Type = type;
+            Message = message;
+        }
+
+        public MessageType Type { get; }
+        public string Message { get; }
+    }
+
+    public readonly struct ConsoleResponseTarget
+    {
+        internal ConsoleResponseTarget(ulong clientId)
+        {
+            ClientId = clientId;
+            IsValid = true;
+        }
+
+        public ulong ClientId { get; }
+        public bool IsValid { get; }
+    }
+
+    public interface IConsoleResponseDispatcher
+    {
+        bool Respond(ConsoleResponseTarget target, MessageType type, string message);
+    }
+
     /// <summary>
     /// (eng) The main class for the debug console.<br/>
     /// It serves as the Model and Controller for the console.<br/>
@@ -18,13 +47,17 @@ namespace Machamy.DeveloperConsole
     {
         private static McConsole _mcConsole;
         public static McConsole Instance => _mcConsole ??= new McConsole();
-        
+
         private IConsoleCommand _lastCommand;
         private IConsoleCommand _currentCommand;
-        
+
         private IConsoleWindow _window;
         private LogLevel _logPrintLevel = LogLevel.Warning;
-        
+        private static readonly Stack<ResponseCaptureContext> ResponseCaptureStack = new();
+        private static IConsoleResponseDispatcher _responseDispatcher;
+
+        public static Action<bool> OnConsoleWindowToggled;
+
         public IConsoleCommand LastCommand
         {
             get => _lastCommand;
@@ -33,21 +66,22 @@ namespace Machamy.DeveloperConsole
         {
             get => _currentCommand;
         }
-        
+
         public LogLevel LogPrintLevel
         {
             get => _logPrintLevel;
             set => _logPrintLevel = value;
         }
-        
+
         public bool IsWindowOpen => _window?.IsOpen ?? false;
+        public static bool IsCapturingResponse => ResponseCaptureStack.Count > 0;
 #if !DO_NOT_USE_DEBUG_CONSOLE
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         public static void Initialize()
         {
             if (_mcConsole != null) return;
             _mcConsole = new McConsole();
-            
+
             Application.logMessageReceived += _mcConsole.OnLogReceived;
         }
 
@@ -76,7 +110,68 @@ namespace Machamy.DeveloperConsole
             }
             _window = window;
         }
-        
+
+        public static void SetResponseDispatcher(IConsoleResponseDispatcher responseDispatcher)
+        {
+            _responseDispatcher = responseDispatcher;
+        }
+
+        public static IDisposable BeginResponseCapture(ConsoleResponseTarget target, List<ConsoleOutputMessage> outputMessages)
+        {
+            if (!target.IsValid)
+            {
+                throw new ArgumentException("Response target is invalid.", nameof(target));
+            }
+
+            if (outputMessages == null)
+            {
+                throw new ArgumentNullException(nameof(outputMessages));
+            }
+
+            ResponseCaptureStack.Push(new ResponseCaptureContext(target, outputMessages));
+            return new ResponseCaptureScope();
+        }
+
+        public static ConsoleResponseTarget CreateResponseTarget(ulong clientId)
+        {
+            return new ConsoleResponseTarget(clientId);
+        }
+
+        public static ConsoleResponseTarget CaptureResponseTarget()
+        {
+            return ResponseCaptureStack.Count > 0 ? ResponseCaptureStack.Peek().Target : default;
+        }
+
+        public static bool Respond(ConsoleResponseTarget target, MessageType type, string message)
+        {
+            if (!target.IsValid || _responseDispatcher == null)
+            {
+                return false;
+            }
+
+            return _responseDispatcher.Respond(target, type, message);
+        }
+
+        public static bool RespondInfo(ConsoleResponseTarget target, string message)
+        {
+            return Respond(target, MessageType.Info, message);
+        }
+
+        public static bool RespondWarning(ConsoleResponseTarget target, string message)
+        {
+            return Respond(target, MessageType.Warning, message);
+        }
+
+        public static bool RespondError(ConsoleResponseTarget target, string message)
+        {
+            return Respond(target, MessageType.Error, message);
+        }
+
+        public static bool RespondSuccess(ConsoleResponseTarget target, string message)
+        {
+            return Respond(target, MessageType.Success, message);
+        }
+
         /// <summary>
         /// (eng) Unregisters the console window from the console.<br/>
         /// If the provided window is null or matches the registered window, it will be unregistered.<br/>
@@ -87,7 +182,7 @@ namespace Machamy.DeveloperConsole
         public void UnregisterWindow(IConsoleWindow window)
         {
             if (_window == null) return;
-            
+
             if (window == null || _window == window)
             {
                 _window.Close();
@@ -98,7 +193,7 @@ namespace Machamy.DeveloperConsole
                 _window = null;
             }
         }
-        
+
         /// <summary>
         /// (eng) Provides auto-completion suggestions based on the current input.<br/>
         /// (kor) 현재 입력을 기반으로 자동 완성 제안을 제공합니다.
@@ -108,9 +203,9 @@ namespace Machamy.DeveloperConsole
         public void GetAutoCompleteSuggestions(string[] input, ref List<string> suggestions)
         {
             suggestions.Clear();
-            
+
         }
-        
+
         /// <summary>
         /// (eng) Handles log messages received from the application.<br/>
         /// It filters messages based on the set log print level and forwards them to the console window.<br/>
@@ -126,8 +221,8 @@ namespace Machamy.DeveloperConsole
             if ((int)type > (int)_logPrintLevel) return;
             _window.Print(type, condition);
         }
-        
-        
+
+
         /// <summary>
         /// (eng) Executes a console command based on the input string.<br/>
         /// It parses the command and its arguments, finds the corresponding command in the CommandLibrary,
@@ -140,26 +235,51 @@ namespace Machamy.DeveloperConsole
         /// <returns></returns>
         public bool ExecuteCommand(string input)
         {
-    
+
 #if !DO_NOT_USE_DEBUG_CONSOLE
             if (_window == null) return false;
             if (string.IsNullOrWhiteSpace(input)) return false;
 
-            var parts = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var commandName = parts[0];
-            var args = parts.Length > 1 ? parts[1..] : Array.Empty<string>();
+            if (!ConsoleCommandTokenizer.TryTokenizeForExecution(input, out var tokens, out string parseError))
+            {
+                Message(MessageType.Error, parseError);
+                return false;
+            }
 
+            if (tokens.Count == 0)
+            {
+                return false;
+            }
+
+            var commandName = tokens[0].Value;
+            var args = new string[tokens.Count - 1];
+            for (int i = 1; i < tokens.Count; i++)
+            {
+                args[i - 1] = tokens[i].Value;
+            }
+
+#if MCDEVCONSOLE_USE_NGO
+            if (CommandLibrary.TryGetAvailableCommand(commandName, out var command))
+#else
             if (CommandLibrary.TryGetCommand(commandName, out var command))
+#endif
             {
                 _currentCommand = command;
                 try
                 {
                     LogEx.Log($"Executing command: {commandName} with args: {string.Join(", ", args)}");
+#if MCDEVCONSOLE_USE_NGO
+                    if (CommandLibrary.GetCommandScope(command) == ConsoleCommandScope.ClientToServer && CommandLibrary.TryRequestRemoteCommand(input, command))
+                    {
+                        _lastCommand = _currentCommand;
+                        return true;
+                    }
+#endif
                     command.Execute(args);
                 }
                 catch (Exception ex)
                 {
-                    Message(MessageType.Error, $"Error executing command '{commandName}': {ex.Message}");
+                    Message(MessageType.Error, $"Error executing command '{commandName}': {ex.Message}\n{ex.StackTrace}");
                     _window.MessageInfo(_currentCommand.Signature);
                 }
                 _lastCommand = _currentCommand;
@@ -174,7 +294,7 @@ namespace Machamy.DeveloperConsole
             return false;
 #endif
         }
-        
+
         public static void Print(string message)
         {
             Instance.PrintInternal(LogType.Log, message);
@@ -183,7 +303,7 @@ namespace Machamy.DeveloperConsole
         {
             Instance.PrintInternal(type, message);
         }
-        
+
         public static void Message(string message)
         {
             Instance.MessageInternal(message);
@@ -191,33 +311,43 @@ namespace Machamy.DeveloperConsole
 
         public static void Message(MessageType type, string message)
         {
-            Instance.MessageInternal(type, message);
+            Instance?.MessageInternal(type, message);
         }
-        public static void MessageDefault(string message) => Instance?._window?.Message(message);
-        public static void MessageInfo(string message) => Instance?._window?.MessageInfo(message);
-        public static void MessageWarning(string message) => Instance?._window?.MessageWarning(message);
-        public static void MessageError(string message) => Instance?._window?.MessageError(message);
-        public static void MessageDebug(string message) => Instance?._window?.MessageDebug(message);
-        public static void MessageSuccess(string message) => Instance?._window?.MessageSuccess(message);
-        
+        public static void MessageDefault(string message) => Instance?.MessageInternal(message);
+        public static void MessageInfo(string message) => Instance?.MessageInternal(MessageType.Info, message);
+        public static void MessageWarning(string message) => Instance?.MessageInternal(MessageType.Warning, message);
+        public static void MessageError(string message) => Instance?.MessageInternal(MessageType.Error, message);
+        public static void MessageDebug(string message) => Instance?.MessageInternal(MessageType.Debug, message);
+        public static void MessageSuccess(string message) => Instance?.MessageInternal(MessageType.Success, message);
+
         private void MessageInternal(string message)
         {
+            if (TryCaptureMessage(MessageType.Default, message))
+            {
+                return;
+            }
+
             _window?.Message(message);
         }
         private void MessageInternal(MessageType type, string message)
         {
-            _window?.Message(type, message); 
+            if (TryCaptureMessage(type, message))
+            {
+                return;
+            }
+
+            _window?.Message(type, message);
         }
         private void PrintInternal(LogType type, string message)
         {
             _window?.Print(type, message);
         }
-        
-        
+
+
         [Preserve, ConsoleCommand("echo", "Prints the input arguments back to the console.", "echo <message>", new []{"Hello, World!", "This is a test message."})]
         private static void EchoCommand(string[] args)
         {
-            string message = string.Join(" ", args); 
+            string message = string.Join(" ", args);
             McConsole.MessageDefault(message);
         }
         /// <summary>
@@ -233,6 +363,40 @@ namespace Machamy.DeveloperConsole
             Instance.LogPrintLevel = level;
             McConsole.MessageDefault($"Log print level set to: {level}");
         }
-        
+
+        private static bool TryCaptureMessage(MessageType type, string message)
+        {
+            if (ResponseCaptureStack.Count == 0)
+            {
+                return false;
+            }
+
+            ResponseCaptureStack.Peek().OutputMessages.Add(new ConsoleOutputMessage(type, message));
+            return true;
+        }
+
+        private readonly struct ResponseCaptureContext
+        {
+            public ResponseCaptureContext(ConsoleResponseTarget target, List<ConsoleOutputMessage> outputMessages)
+            {
+                Target = target;
+                OutputMessages = outputMessages;
+            }
+
+            public ConsoleResponseTarget Target { get; }
+            public List<ConsoleOutputMessage> OutputMessages { get; }
+        }
+
+        private readonly struct ResponseCaptureScope : IDisposable
+        {
+            public void Dispose()
+            {
+                if (ResponseCaptureStack.Count > 0)
+                {
+                    ResponseCaptureStack.Pop();
+                }
+            }
+        }
+
     }
 }

@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+#if MCDEVCONSOLE_USE_NGO
+using Machamy.DeveloperConsole;
+#endif
 
 namespace Machamy.DeveloperConsole.Commands
 {
@@ -27,6 +30,9 @@ namespace Machamy.DeveloperConsole.Commands
         /// [] is for optional arguments.
         /// </summary>
         string Signature { get; }
+#if MCDEVCONSOLE_USE_NGO
+        ConsoleCommandScope Scope => ConsoleCommandScope.Local;
+#endif
         void Execute(string[] args);
         
         /// <summary>

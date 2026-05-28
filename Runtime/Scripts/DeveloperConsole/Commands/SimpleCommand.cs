@@ -1,6 +1,9 @@
 using Machamy.Utils;
 using System;
 using System.Collections.Generic;
+#if MCDEVCONSOLE_USE_NGO
+using Machamy.DeveloperConsole;
+#endif
 
 namespace Machamy.DeveloperConsole.Commands
 {
@@ -16,12 +19,22 @@ namespace Machamy.DeveloperConsole.Commands
         public string Description { get; }
         public string Signature => Command;
         private readonly Action _action;
+#if MCDEVCONSOLE_USE_NGO
+        public ConsoleCommandScope Scope { get; }
+#endif
 
+#if MCDEVCONSOLE_USE_NGO
+        public SimpleCommand(string command, string description, Action action, ConsoleCommandScope scope = ConsoleCommandScope.Local)
+#else
         public SimpleCommand(string command, string description, Action action)
+#endif
         {
             Command = command;
             Description = description;
             _action = action;
+#if MCDEVCONSOLE_USE_NGO
+            Scope = scope;
+#endif
         }
 
         public void Execute(string[] args)
@@ -46,13 +59,23 @@ namespace Machamy.DeveloperConsole.Commands
         private readonly string _signature;
         public string Signature => _signature;
         public Action<string[], List<string>> AutoCompleteAction { get; set; }
+#if MCDEVCONSOLE_USE_NGO
+        public ConsoleCommandScope Scope { get; }
+#endif
 
+#if MCDEVCONSOLE_USE_NGO
+        public SimpleCommand(string command, string description, Action<T> action, string signature = null, ConsoleCommandScope scope = ConsoleCommandScope.Local)
+#else
         public SimpleCommand(string command, string description, Action<T> action, string signature = null)
+#endif
         {
             Command = command;
             Description = description;
             _action = action;
             _signature = signature ?? $"{command} <{typeof(T).Name}>";
+#if MCDEVCONSOLE_USE_NGO
+            Scope = scope;
+#endif
         }
         
         public void AutoComplete(Span<string> args, ref List<string> suggestions)
@@ -106,13 +129,23 @@ namespace Machamy.DeveloperConsole.Commands
         private readonly string _signature;
         public string Signature => _signature;
         public Action<string[], List<string>> AutoCompleteAction { get; set; }
+#if MCDEVCONSOLE_USE_NGO
+        public ConsoleCommandScope Scope { get; }
+#endif
 
+#if MCDEVCONSOLE_USE_NGO
+        public SimpleCommand(string command, string description, Action<T1, T2> action, string signature = null, ConsoleCommandScope scope = ConsoleCommandScope.Local)
+#else
         public SimpleCommand(string command, string description, Action<T1, T2> action, string signature = null)
+#endif
         {
             Command = command;
             Description = description;
             _action = action;
             _signature = signature ?? $"{command} <{typeof(T1).Name}> <{typeof(T2).Name}>";
+#if MCDEVCONSOLE_USE_NGO
+            Scope = scope;
+#endif
         }
         
         public void AutoComplete(Span<string> args, ref List<string> suggestions)

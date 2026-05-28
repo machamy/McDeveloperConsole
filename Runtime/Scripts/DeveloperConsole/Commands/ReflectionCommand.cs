@@ -1,6 +1,9 @@
 ﻿using Machamy.Utils;
 using System;
 using System.Collections.Generic;
+#if MCDEVCONSOLE_USE_NGO
+using Machamy.DeveloperConsole;
+#endif
 
 namespace Machamy.DeveloperConsole.Commands
 {
@@ -24,6 +27,9 @@ namespace Machamy.DeveloperConsole.Commands
         private readonly Type[] _paramType;
         private string[] _arg0AutoComplete;
         public string[] Arg0AutoComplete => _arg0AutoComplete;
+#if MCDEVCONSOLE_USE_NGO
+        public ConsoleCommandScope Scope { get; private set; }
+#endif
 
         private ReflectionCommand(string commandName, string description, System.Reflection.MethodInfo method)
         {
@@ -84,7 +90,11 @@ namespace Machamy.DeveloperConsole.Commands
                 McConsole.MessageError($"Error executing command '{Command}': {ex.Message}");
             }
         }
+#if MCDEVCONSOLE_USE_NGO
+        public static bool Create(string commandName, string description, System.Reflection.MethodInfo method,string signature, ConsoleCommandScope scope, out ReflectionCommand command)
+#else
         public static bool Create(string commandName, string description, System.Reflection.MethodInfo method,string signature, out ReflectionCommand command)
+#endif
         {
             if (!method.IsStatic)
             {
@@ -99,12 +109,19 @@ namespace Machamy.DeveloperConsole.Commands
                 return false;
             }
             command._signature = signature ?? $"{commandName} " + string.Join(" ", Array.ConvertAll(command._paramType, t => $"<{t.Name}>"));
+#if MCDEVCONSOLE_USE_NGO
+            command.Scope = scope;
+#endif
             return true;
         }
         
         public static bool Create(string commandName, string description, System.Reflection.MethodInfo method, out ReflectionCommand command)
         {
+#if MCDEVCONSOLE_USE_NGO
+            return Create(commandName, description, method, null, ConsoleCommandScope.Local, out command);
+#else
             return Create(commandName, description, method, null, out command);
+#endif
         }
         
         

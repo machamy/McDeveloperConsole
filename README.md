@@ -4,50 +4,75 @@
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 [![Package Version](https://img.shields.io/badge/Version-1.0.2-orange.svg)](package.json)
 
-Unity UI Toolkit 기반의 런타임 개발자 콘솔 패키지입니다. 게임 실행 중 로그를 확인하고, 콘솔 명령을 실행하며, 커스텀 명령어와 자동완성을 추가할 수 있습니다.
+Unity UI Toolkit 기반 런타임 개발자 콘솔 패키지입니다. 플레이 중 Unity 로그를 확인하고, 콘솔 명령을 실행하며, 프로젝트 전용 디버그 명령을 자동 등록할 수 있습니다.
 
-## 주요 기능
+Netcode for GameObjects가 설치된 프로젝트에서는 `MCDEVCONSOLE_USE_NGO` define이 자동으로 켜지고, 클라이언트-서버 콘솔 명령 scope와 원격 실행 기능을 사용할 수 있습니다.
 
-- 런타임에서 열고 닫을 수 있는 인게임 개발자 콘솔
+## Features
+
+- UI Toolkit 기반 인게임 콘솔 창
 - Unity `Debug.Log`, `Debug.LogWarning`, `Debug.LogError`, `Debug.LogException` 출력 연동
-- `[ConsoleCommand]` 기반 정적 메서드 자동 등록
-- `ConsoleCommandClass`처럼 명령 전용 정적 클래스로 커맨드 묶음 관리
+- `[ConsoleCommand]` 기반 static method 자동 등록
+- `[ConsoleCommandClass]` 기반 `IConsoleCommand` 구현체 자동 등록
 - `IConsoleCommand`, `SimpleCommand`, `RawCommand` 기반 수동 명령 등록
 - 명령어와 첫 번째 인자 자동완성
 - 입력 히스토리 탐색
-- UI Toolkit 기반 스타일 커스터마이징
-- 드래그 이동, 동/남/남동 방향 리사이즈, 해상도 변경 시 크기 제한 자동 보정
+- 드래그 이동, 동/남/남동 방향 리사이즈
+- 해상도 변경 시 콘솔 크기 제한 자동 보정
+- Netcode for GameObjects 사용 시 `Local`, `ClientOnly`, `ServerOnly`, `ClientToServer` command scope 지원
 
-## 설치
+## Installation
 
 ### Unity Package Manager
 
-1. Unity에서 `Window > Package Manager`를 엽니다.
-2. `+` 버튼을 누르고 `Add package from git URL...`을 선택합니다.
-3. 아래 URL을 입력합니다.
+Unity Package Manager의 `Add package from git URL...`에 아래 주소를 넣습니다.
 
 ```text
 https://github.com/machamy/McDeveloperConsole.git
 ```
 
-### 수동 설치
+### Manual Copy
 
-1. 저장소를 클론하거나 다운로드합니다.
-2. `Assets/McDeveloperConsole` 폴더를 Unity 프로젝트의 `Assets` 아래에 복사합니다.
-3. Unity가 패키지와 `.asmdef`를 임포트할 때까지 기다립니다.
+직접 포함할 때는 이 저장소의 아래 항목을 Unity 프로젝트의 `Assets/McDeveloperConsole` 아래에 복사합니다.
 
-## 빠른 시작
+```text
+Editor
+Runtime
+Editor.meta
+Runtime.meta
+LICENSE
+LICENSE.meta
+package.json
+package.json.meta
+README.md
+README.md.meta
+```
+
+Unity `.meta` 파일을 같이 유지해야 prefab, USS, UXML, asmdef 참조가 깨지지 않습니다.
+
+## Folder Layout
+
+| Path | Purpose |
+| --- | --- |
+| `Runtime/Prefabs/ConsoleUI.prefab` | 씬에 배치하는 콘솔 UI prefab |
+| `Runtime/Scripts/DeveloperConsole` | 콘솔 core, command system, message type |
+| `Runtime/Scripts/UIToolkit` | drag/resize manipulator |
+| `Runtime/UI Toolkit/DebugConsole` | UXML/USS/console panel setting |
+| `Runtime/Netcode` | Netcode for GameObjects integration |
+| `Editor` | inspector/editor support |
+
+## Quick Start
 
 1. `Runtime/Prefabs/ConsoleUI.prefab`을 씬에 배치합니다.
-2. 기본 프리팹은 `Input System`의 `<Keyboard>/backquote` 바인딩으로 콘솔을 토글합니다.
-3. 필요하면 `ConsoleUI` 컴포넌트의 `Toggle Console Action`에 다른 `InputAction`을 연결합니다.
-4. 플레이 모드에서 backquote 키를 눌러 콘솔을 열고 명령어를 입력합니다.
+2. 기본 토글 키는 `` ` `` 입니다.
+3. 필요하면 `ConsoleUI` 컴포넌트의 `Toggle Console Action`에 프로젝트의 `InputAction`을 연결합니다.
+4. 플레이 모드에서 콘솔을 열고 `help`, `ping`, `echo hello` 같은 명령을 실행합니다.
 
 ```csharp
 using Machamy.DeveloperConsole;
 using UnityEngine;
 
-public class ConsoleExample : MonoBehaviour
+public sealed class ConsoleExample : MonoBehaviour
 {
     private void Start()
     {
@@ -62,35 +87,35 @@ public class ConsoleExample : MonoBehaviour
 }
 ```
 
-명령을 코드에서 직접 실행할 수도 있습니다.
+코드에서 명령을 직접 실행할 수도 있습니다.
 
 ```csharp
 McConsole.Instance.ExecuteCommand("ping");
 McConsole.Instance.ExecuteCommand("echo hello world");
 ```
 
-## 커맨드 작성
+## Defining Commands
 
-### 속성 기반 등록
+### Attribute Commands
 
-정적 메서드에 `[ConsoleCommand]`를 붙이면 런타임 초기화 시 자동 등록됩니다. 지원되는 파라미터 타입은 `int`, `float`, `bool`, `string`, `enum`입니다.
+`[ConsoleCommand]`를 static method에 붙이면 런타임 초기화 시 자동 등록됩니다. 지원되는 파라미터 타입은 `int`, `float`, `bool`, `string`, `enum`입니다.
 
 ```csharp
 using Machamy.DeveloperConsole;
 using Machamy.DeveloperConsole.Attributes;
 
-public static class GameCommands
+public static class PlayerConsoleCommands
 {
-    [ConsoleCommand("setHealth", "플레이어 체력을 설정합니다.", "setHealth <value>", new[] { "50", "100", "150" })]
+    [ConsoleCommand("setHealth", "Sets player health.", "setHealth <value>", new[] { "50", "100", "150" })]
     private static void SetHealth(float value)
     {
         McConsole.MessageInfo($"Health set to {value}");
     }
 
-    [ConsoleCommand("spawn", "오브젝트를 생성합니다.", "spawn <name> <count>")]
-    private static void Spawn(string name, int count)
+    [ConsoleCommand("god", "Toggles god mode.", "god <true|false>", new[] { "true", "false" })]
+    private static void SetGodMode(bool enabled)
     {
-        McConsole.MessageSuccess($"Spawned {count} {name}");
+        McConsole.MessageSuccess($"God mode: {enabled}");
     }
 }
 ```
@@ -98,46 +123,12 @@ public static class GameCommands
 `string[]` 하나만 받는 메서드는 직접 인자를 파싱하는 raw command로 등록됩니다.
 
 ```csharp
-[ConsoleCommand("echoRaw", "입력 인자를 그대로 출력합니다.", "echoRaw <message>")]
-private static void EchoRaw(string[] args)
-{
-    McConsole.MessageDefault(string.Join(" ", args));
-}
-```
-
-### ConsoleCommandClass 예제
-
-여러 커맨드를 한 파일에 모아 관리하려면 명령 전용 정적 클래스를 만들고, 각 정적 메서드에 `[ConsoleCommand]`를 붙이면 됩니다. 클래스 이름은 자유롭게 정할 수 있으며, 아래처럼 `ConsoleCommandClass`로 두면 프로젝트 안의 콘솔 명령 모음임을 명확히 드러낼 수 있습니다.
-
-```csharp
 using Machamy.DeveloperConsole;
 using Machamy.DeveloperConsole.Attributes;
-using UnityEngine;
 
-public static class ConsoleCommandClass
+public static class RawConsoleCommands
 {
-    [ConsoleCommand("god", "무적 모드를 설정합니다.", "god <true|false>", new[] { "true", "false" })]
-    private static void SetGodMode(bool enabled)
-    {
-        McConsole.MessageInfo($"God mode: {enabled}");
-    }
-
-    [ConsoleCommand("teleport", "플레이어를 지정한 좌표로 이동합니다.", "teleport <x> <y> <z>")]
-    private static void Teleport(float x, float y, float z)
-    {
-        var position = new Vector3(x, y, z);
-
-        // 실제 프로젝트에서는 플레이어 참조를 찾아 position을 적용합니다.
-        McConsole.MessageSuccess($"Teleport to {position}");
-    }
-
-    [ConsoleCommand("give", "아이템을 지급합니다.", "give <itemId> <count>", new[] { "potion", "coin", "key" })]
-    private static void GiveItem(string itemId, int count)
-    {
-        McConsole.MessageSuccess($"Give {itemId} x{count}");
-    }
-
-    [ConsoleCommand("say", "입력한 문장을 그대로 출력합니다.", "say <message>")]
+    [ConsoleCommand("say", "Prints the raw input.", "say <message>")]
     private static void Say(string[] args)
     {
         McConsole.MessageDefault(string.Join(" ", args));
@@ -145,20 +136,22 @@ public static class ConsoleCommandClass
 }
 ```
 
-### 수동 등록
+### ConsoleCommandClass
 
-`IConsoleCommand`를 구현하거나 제공되는 명령 클래스를 만들어 등록할 수 있습니다.
+여러 명령을 클래스 단위로 관리하려면 `IConsoleCommand` 구현체에 `[ConsoleCommandClass]`를 붙입니다. 런타임 초기화 시 자동으로 인스턴스가 생성되어 등록되므로 매개변수 없는 생성자가 필요합니다.
 
 ```csharp
 using System;
 using System.Collections.Generic;
 using Machamy.DeveloperConsole;
+using Machamy.DeveloperConsole.Attributes;
 using Machamy.DeveloperConsole.Commands;
 
+[ConsoleCommandClass]
 public sealed class DifficultyCommand : IConsoleCommand
 {
     public string Command => "difficulty";
-    public string Description => "난이도를 변경합니다.";
+    public string Description => "Changes difficulty.";
     public string Signature => "difficulty <easy|normal|hard>";
 
     public void Execute(string[] args)
@@ -174,7 +167,7 @@ public sealed class DifficultyCommand : IConsoleCommand
 
     public void AutoComplete(Span<string> args, ref List<string> suggestions)
     {
-        var current = args.Length > 0 ? args[^1] : "";
+        var current = args.Length > 0 ? args[^1] : string.Empty;
         foreach (var option in new[] { "easy", "normal", "hard" })
         {
             if (option.StartsWith(current, StringComparison.OrdinalIgnoreCase))
@@ -182,35 +175,74 @@ public sealed class DifficultyCommand : IConsoleCommand
         }
     }
 }
-
-CommandLibrary.RegisterCommand(new DifficultyCommand());
 ```
 
-## 조작법
+### Manual Registration
 
-| 입력 | 동작 |
+명령을 원하는 시점에 직접 등록하거나 해제할 수도 있습니다.
+
+```csharp
+using Machamy.DeveloperConsole;
+using Machamy.DeveloperConsole.Commands;
+
+CommandLibrary.RegisterCommand(new DifficultyCommand());
+CommandLibrary.UnregisterCommand("difficulty");
+```
+
+## Auto-completion
+
+`[ConsoleCommand]`의 네 번째 인자에 첫 번째 argument 후보를 넣을 수 있습니다.
+
+```csharp
+[ConsoleCommand("give", "Gives an item.", "give <itemId>", new[] { "potion", "coin", "key" })]
+private static void Give(string itemId)
+{
+    McConsole.MessageSuccess($"Give {itemId}");
+}
+```
+
+`IConsoleCommand`를 직접 구현하면 `AutoComplete`에서 현재 입력 상태에 맞는 후보를 더 정교하게 제어할 수 있습니다.
+
+```csharp
+public void AutoComplete(Span<string> args, ref List<string> suggestions)
+{
+    if (args.Length != 1)
+        return;
+
+    var current = args[0];
+    foreach (var itemId in ItemDatabase.AllIds)
+    {
+        if (itemId.StartsWith(current, StringComparison.OrdinalIgnoreCase))
+            suggestions.Add(itemId);
+    }
+}
+```
+
+## Controls
+
+| Input | Action |
 | --- | --- |
-| `backquote` | 콘솔 열기/닫기 |
-| `Enter` | 현재 입력 실행 |
-| `Tab` | 다음 자동완성 후보 적용 |
-| `Up Arrow` | 이전 입력 히스토리 불러오기 |
-| `Down Arrow` | 다음 입력 히스토리 불러오기 |
+| `` ` `` | Open or close the console |
+| `Enter` | Execute current input |
+| `Tab` | Apply next autocomplete suggestion |
+| `Up Arrow` | Recall previous submitted command |
+| `Down Arrow` | Recall next submitted command |
 
-## 내장 명령
+## Built-in Commands
 
-| 명령 | 설명 |
+| Command | Description |
 | --- | --- |
-| `help` | 등록된 명령 목록을 출력하거나 특정 명령의 설명을 출력합니다. |
-| `help2` | `RawCommand` 기반 help 명령입니다. |
-| `ping` | 콘솔 응답을 확인하고 `Pong!`을 출력합니다. |
-| `echo <message>` | 입력 메시지를 콘솔에 출력합니다. |
-| `clear` | 콘솔 히스토리를 지웁니다. |
-| `autoScroll` | 새 메시지/로그 발생 시 자동 스크롤을 토글합니다. |
-| `setOpacity <value>` | 콘솔 투명도를 `0.0`부터 `1.0` 사이로 설정합니다. |
-| `setLogLevel <level>` | Unity 로그 출력 레벨을 설정합니다. `0: None`, `1: Exception`, `2: Error`, `3: Warning`, `4: Info` |
-| `printAllLogTypes` | 로그 타입과 메시지 타입 출력 테스트를 실행합니다. |
+| `help [command]` | Lists available commands or prints help for one command |
+| `help2 [command]` | RawCommand-based help command |
+| `ping` | Prints `Pong!` |
+| `echo <message>` | Prints the input message |
+| `clear` | Clears console history |
+| `autoScroll` | Toggles automatic scroll-to-bottom |
+| `setOpacity <value>` | Sets console opacity from `0.0` to `1.0` |
+| `setLogLevel <level>` | Sets Unity log capture level: `0: None`, `1: Exception`, `2: Error`, `3: Warning`, `4: Info` |
+| `printAllLogTypes` | Prints sample Unity log and console message types |
 
-## 주요 API
+## Main API
 
 ### McConsole
 
@@ -229,6 +261,9 @@ McConsole.Print(LogType.Warning, "warning log");
 
 McConsole.SetLogLevel(LogLevel.Warning);
 McConsole.Instance.ExecuteCommand("help");
+
+bool isOpen = McConsole.Instance.IsWindowOpen;
+LogLevel currentLevel = McConsole.Instance.LogPrintLevel;
 ```
 
 ### ConsoleUI
@@ -242,61 +277,63 @@ ConsoleUI.Instance.ScrollToBottom();
 ConsoleUI.Instance.SetOpacity(0.8f);
 ConsoleUI.Instance.RequestAutoComplete("setOpacity ");
 
-bool isOpen = ConsoleUI.IsConsoleOpen;
+bool isOpen = ConsoleUI.Instance.IsOpen;
+string currentInput = ConsoleUI.Instance.CurrentInput;
 ```
 
-콘솔이 열리는 동안 게임 입력을 비활성화하려면 static 이벤트를 구독합니다.
+콘솔 창의 active 상태 변화를 감지해야 하면 `McConsole.OnConsoleWindowToggled`를 사용할 수 있습니다. 이 hook은 `ConsoleUI.OnEnable`/`OnDisable`에서 호출됩니다.
 
 ```csharp
 using Machamy.DeveloperConsole;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class GameplayInputGate : MonoBehaviour
+public sealed class GameplayInputGate : MonoBehaviour
 {
     [SerializeField] private InputActionMap gameplayActionMap;
 
     private void OnEnable()
     {
-        ConsoleUI.Opened += DisableGameplayInput;
-        ConsoleUI.Closed += EnableGameplayInput;
+        McConsole.OnConsoleWindowToggled += SetGameplayInput;
     }
 
     private void OnDisable()
     {
-        ConsoleUI.Opened -= DisableGameplayInput;
-        ConsoleUI.Closed -= EnableGameplayInput;
+        McConsole.OnConsoleWindowToggled -= SetGameplayInput;
     }
 
-    private void DisableGameplayInput()
+    private void SetGameplayInput(bool consoleObjectEnabled)
     {
-        gameplayActionMap?.Disable();
-    }
-
-    private void EnableGameplayInput()
-    {
-        gameplayActionMap?.Enable();
+        if (consoleObjectEnabled)
+            gameplayActionMap?.Disable();
+        else
+            gameplayActionMap?.Enable();
     }
 }
 ```
 
-`static event`는 구독자가 남아 있으면 참조가 유지될 수 있으므로 `OnDisable`에서 반드시 구독을 해제하세요.
+## ConsoleUI Settings
 
-열림 상태 하나만 처리하고 싶다면 `OpenStateChanged`를 사용할 수 있습니다.
+`ConsoleUI` 컴포넌트에서 주요 동작을 설정합니다.
 
-```csharp
-ConsoleUI.OpenStateChanged += isOpen =>
-{
-    if (isOpen)
-        gameplayActionMap.Disable();
-    else
-        gameplayActionMap.Enable();
-};
+| Field | Description |
+| --- | --- |
+| `_toggleConsoleAction` | 콘솔 토글용 Input System action. 비어 있으면 `` ` `` 텍스트 입력으로 토글합니다 |
+| `_useAutoComplete` | 자동완성 사용 여부 |
+| `autoScrollToBottomOnNewMessage` | 콘솔 메시지 추가 시 자동으로 아래로 스크롤 |
+| `autoScrollToBottomOnNewPrint` | Unity 로그 출력 추가 시 자동으로 아래로 스크롤 |
+| `useResolutionWatcher` | 해상도 변경 시 콘솔 리사이즈 한계를 화면 크기에 맞게 보정 |
+| `dontDestroyOnLoad` | scene 전환 후에도 콘솔 UI 유지 |
+| `minSize` | 리사이즈 가능한 최소 크기 |
+| `maxSize` | 리사이즈 가능한 최대 크기 |
+
+스타일은 아래 USS에서 수정합니다.
+
+```text
+Runtime/UI Toolkit/DebugConsole/console.uss
 ```
 
-### MessageType
-
-메시지는 USS 클래스와 연결되는 타입으로 스타일링됩니다.
+메시지 색상은 `MessageType.UssTag`와 USS class로 연결됩니다.
 
 ```csharp
 MessageType.Default;
@@ -310,48 +347,162 @@ MessageType.White;
 MessageType.Cyan;
 ```
 
-## 설정과 커스터마이징
+## Netcode Integration
 
-`ConsoleUI` 컴포넌트에서 주요 옵션을 조정할 수 있습니다.
+`com.unity.netcode.gameobjects`가 설치되어 있으면 asmdef `versionDefines`가 `MCDEVCONSOLE_USE_NGO`를 자동 정의합니다. 이 define이 켜진 경우 `Runtime/Netcode` 코드가 함께 컴파일됩니다.
 
-| 옵션 | 기본 동작 |
+### Runtime Behavior
+
+- `McConsoleNetcodeAdapter`가 scene load 이후 자동 생성됩니다.
+- adapter는 `NetworkManager.Singleton`이 생길 때까지 기다렸다가 custom messaging handler를 등록합니다.
+- 서버는 클라이언트에게 remote console 허용 여부를 전파합니다.
+- 클라이언트가 `ClientToServer` scope 명령을 실행하면 서버로 command request를 보냅니다.
+- 서버는 명령 실행 중 출력된 `McConsole.Message*` 결과를 캡처해 요청 클라이언트에게 돌려줍니다.
+
+### Command Scopes
+
+| Scope | Availability |
 | --- | --- |
-| `_useAutoComplete` | 자동완성 사용 여부입니다. 기본 프리팹은 활성화되어 있습니다. |
-| `autoScrollToBottomOnNewMessage` | 새 콘솔 메시지 발생 시 하단으로 스크롤합니다. |
-| `autoScrollToBottomOnNewPrint` | 새 Unity 로그 출력 시 하단으로 스크롤합니다. |
-| `useResolutionWatcher` | 화면 해상도 변경 시 콘솔 크기 제한을 현재 화면에 맞게 보정합니다. |
-| `minSize` | 리사이즈 가능한 최소 크기입니다. 기본 프리팹은 `360 x 200`입니다. |
-| `maxSize` | 리사이즈 가능한 최대 크기입니다. 기본 프리팹은 `1920 x 1080`입니다. |
+| `ConsoleCommandScope.Local` | 로컬 콘솔에서 실행 |
+| `ConsoleCommandScope.ClientOnly` | 클라이언트에서만 노출 |
+| `ConsoleCommandScope.ServerOnly` | 서버/호스트에서만 노출 |
+| `ConsoleCommandScope.ClientToServer` | 서버에서 실행 가능하며, 허용된 클라이언트는 서버에 실행 요청 가능 |
 
-스타일은 `Runtime/UI Toolkit/DebugConsole/console.uss`에서 수정합니다. 메시지 색상은 `.message.info`, `.message.warn`, `.message.error`, `.message.success`, `.message.gray`, `.message.white`, `.message.cyan`, `.message.debug` 클래스에 연결되어 있습니다.
+Netcode scope는 `[ConsoleCommand]`의 다섯 번째 인자 또는 `IConsoleCommand.Scope`으로 지정합니다.
 
-## 비활성화 심볼
+```csharp
+#if MCDEVCONSOLE_USE_NGO
+using Machamy.DeveloperConsole;
+using Machamy.DeveloperConsole.Attributes;
 
-빌드나 특정 환경에서 콘솔을 제외하려면 `DO_NOT_USE_DEBUG_CONSOLE` 심볼을 정의합니다. 이 심볼이 정의되면 `ConsoleUI`는 생성 시 제거되고, 명령 자동 등록과 실행 로직이 비활성화됩니다.
+public static class ServerConsoleCommands
+{
+    [ConsoleCommand(
+        "server.giveGold",
+        "Gives gold on the server.",
+        "server.giveGold <amount>",
+        null,
+        ConsoleCommandScope.ClientToServer)]
+    private static void GiveGold(int amount)
+    {
+        McConsole.MessageSuccess($"Server gave {amount} gold.");
+    }
+}
+#endif
+```
 
-`LogEx` 로그를 빌드에서 제외하려면 `DONT_USE_LOGEX_IN_BUILD` 심볼을 사용할 수 있습니다.
+`IConsoleCommand` 예제:
 
-## 요구사항
+```csharp
+#if MCDEVCONSOLE_USE_NGO
+using Machamy.DeveloperConsole;
+using Machamy.DeveloperConsole.Attributes;
+using Machamy.DeveloperConsole.Commands;
 
-- Unity `2022.3` 이상
-- `com.unity.inputsystem` `1.6.0`
-- `com.unity.ui.builder` `1.0.0`
-- `com.unity.ugui` `1.0.0`
+[ConsoleCommandClass]
+public sealed class ServerPingCommand : IConsoleCommand
+{
+    public string Command => "server.ping";
+    public string Description => "Runs ping on the server.";
+    public string Signature => "server.ping";
+    public ConsoleCommandScope Scope => ConsoleCommandScope.ClientToServer;
 
-## 문제 해결
+    public void Execute(string[] args)
+    {
+        McConsole.MessageInfo("Server pong.");
+    }
+}
+#endif
+```
 
-**콘솔이 열리지 않습니다.**
-씬에 `ConsoleUI.prefab`이 배치되어 있는지 확인합니다. 기본 토글 키는 backquote입니다. 커스텀 `InputAction`을 연결했다면 액션 바인딩도 확인합니다.
+### Netcode Commands
 
-**자동완성이 보이지 않습니다.**
-`ConsoleUI`의 `_useAutoComplete` 옵션이 켜져 있는지 확인합니다. 명령어 인자 자동완성은 명령 구현의 `AutoComplete` 또는 `[ConsoleCommand]`의 `arg0AutoComplete` 값에 따라 동작합니다.
+| Command | Scope | Description |
+| --- | --- | --- |
+| `net.status` | Local | Prints current `NetworkManager` client/server/host state |
+| `net.remoteConsole <on|off>` | ServerOnly | Toggles client-to-server console command requests |
+| `net.showRequests <on|off>` | ServerOnly | Toggles server-side logging for client command requests |
+| `net.serverPing` | ClientToServer | Requests a server-side ping from a client |
 
-**명령어가 등록되지 않습니다.**
-속성 기반 명령은 `static` 메서드여야 합니다. 파라미터는 `int`, `float`, `bool`, `string`, `enum` 또는 raw command용 `string[]` 하나여야 합니다.
+### Remote Responses
 
-**Unity 로그가 콘솔에 출력되지 않습니다.**
-`McConsole.SetLogLevel` 또는 `setLogLevel` 명령으로 현재 로그 출력 레벨을 확인합니다. 기본값은 `Warning`입니다.
+서버 명령이 나중에 비동기 응답을 보내야 하면 현재 요청자의 target을 캡처해 보관할 수 있습니다.
 
-## 라이선스
+```csharp
+#if MCDEVCONSOLE_USE_NGO
+using Machamy.DeveloperConsole;
+using Machamy.DeveloperConsole.Attributes;
 
-이 프로젝트는 MIT License로 배포됩니다. 자세한 내용은 [LICENSE](LICENSE)를 확인하세요.
+public static class AsyncServerCommands
+{
+    [ConsoleCommand(
+        "server.longJob",
+        "Starts a long server job.",
+        "server.longJob",
+        null,
+        ConsoleCommandScope.ClientToServer)]
+    private static void StartLongJob()
+    {
+        var target = McConsole.CaptureResponseTarget();
+        McConsole.MessageInfo("Server job started.");
+
+        // Later, on the server:
+        McConsole.RespondSuccess(target, "Server job finished.");
+    }
+}
+#endif
+```
+
+## Build Symbols
+
+| Symbol | Effect |
+| --- | --- |
+| `DO_NOT_USE_DEBUG_CONSOLE` | 콘솔 초기화, 명령 자동 등록, 명령 실행 경로를 비활성화합니다 |
+| `DONT_USE_LOGEX_IN_BUILD` | player build에서 `LogEx` 출력을 비활성화합니다 |
+| `MCDEVCONSOLE_USE_NGO` | Netcode for GameObjects integration을 활성화합니다. NGO 설치 시 asmdef에서 자동 정의됩니다 |
+
+## Requirements
+
+- Unity 2022.3 or newer
+- `com.unity.inputsystem` 1.6.0 or newer
+- `com.unity.ui.builder` 1.0.0 or newer
+- `com.unity.ugui` 1.0.0 or newer
+- Optional: `com.unity.netcode.gameobjects` for Netcode integration
+
+## Troubleshooting
+
+### Console does not open
+
+- 씬에 `ConsoleUI.prefab`이 배치되어 있는지 확인합니다.
+- `UIDocument`가 비활성화되어 있지 않은지 확인합니다.
+- 커스텀 `Toggle Console Action`을 연결했다면 action binding과 action enable 상태를 확인합니다.
+- 별도 action을 연결하지 않았다면 플레이 중 `` ` `` 키 입력이 들어오는지 확인합니다.
+
+### Commands are not registered
+
+- `[ConsoleCommand]` 메서드는 반드시 `static`이어야 합니다.
+- 지원 타입은 `int`, `float`, `bool`, `string`, `enum`, 또는 raw command용 단일 `string[]`입니다.
+- `[ConsoleCommandClass]`는 `IConsoleCommand`를 구현해야 하며 매개변수 없는 생성자가 필요합니다.
+- `DO_NOT_USE_DEBUG_CONSOLE` define이 켜져 있으면 자동 등록과 실행이 비활성화됩니다.
+
+### Auto-completion does not show
+
+- `ConsoleUI`의 `_useAutoComplete`가 켜져 있는지 확인합니다.
+- 첫 번째 인자 후보는 `[ConsoleCommand]`의 `arg0AutoComplete` 또는 `IConsoleCommand.AutoComplete`에서 제공합니다.
+
+### Unity logs do not appear
+
+- `McConsole.SetLogLevel` 또는 `setLogLevel` 명령으로 현재 log level을 확인합니다.
+- 기본 log capture level은 `Warning`입니다.
+- `DO_NOT_USE_DEBUG_CONSOLE` define이 켜져 있으면 Unity log forwarding도 비활성화됩니다.
+
+### Netcode commands do not appear
+
+- `com.unity.netcode.gameobjects`가 설치되어 있는지 확인합니다.
+- `MCDEVCONSOLE_USE_NGO` define이 asmdef version define으로 켜졌는지 확인합니다.
+- `ServerOnly`, `ClientOnly`, `ClientToServer` 명령은 현재 client/server 상태에 따라 `help` 목록에서 필터링됩니다.
+- release build에서는 기본적으로 client-to-server remote console이 꺼져 있습니다. 서버에서 `net.remoteConsole on`으로 켤 수 있습니다.
+
+## License
+
+MIT License. See [LICENSE](LICENSE).

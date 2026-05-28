@@ -2,8 +2,9 @@
   "name": "com.machamy.developerconsole",
   "version": "1.0.2",
   "displayName": "Mc Developer Console",
-  "description": "A comprehensive in-game developer console for Unity with UI Toolkit support, auto-completion, command system, and customizable UI. Unity UI Toolkit을 사용한 포괄적인 게임 내 개발자 콘솔입니다.",
+  "description": "A UI Toolkit based in-game developer console for Unity with command registration, auto-completion, log integration, and optional Netcode for GameObjects support.",
   "unity": "2022.3",
+  "license": "MIT",
   "dependencies": {
     "com.unity.inputsystem": "1.6.0",
     "com.unity.ui.builder": "1.0.0",
@@ -11,7 +12,7 @@
   },
   "keywords": [
     "DevConsole",
-    "DeveloperConsole", 
+    "DeveloperConsole",
     "Console",
     "Debug",
     "Input System",

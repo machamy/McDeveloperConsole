@@ -1,4 +1,4 @@
-﻿using Machamy.UIToolkit;
+using Machamy.UIToolkit;
 using Machamy.Utils;
 using System;
 using System.Collections.Generic;
@@ -20,31 +20,6 @@ namespace Machamy.DeveloperConsole
     {
         private static ConsoleUI _instance;
         public static ConsoleUI Instance => _instance;
-        /// <summary>
-        /// True when the registered console UI is currently open.
-        /// </summary>
-        public static bool IsConsoleOpen => _instance != null && _instance.IsOpen;
-        /// <summary>
-        /// Raised after the console changes from closed to open.
-        /// </summary>
-        public static event Action Opened;
-        /// <summary>
-        /// Raised after the console changes from open to closed.
-        /// </summary>
-        public static event Action Closed;
-        /// <summary>
-        /// Raised after the console open state changes. The argument is true when opened.
-        /// </summary>
-        public static event Action<bool> OpenStateChanged;
-
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetStaticState()
-        {
-            _instance = null;
-            Opened = null;
-            Closed = null;
-            OpenStateChanged = null;
-        }
         /*
          *  Default Variables
          */
@@ -56,6 +31,8 @@ namespace Machamy.DeveloperConsole
         [SerializeField] private bool autoScrollToBottomOnNewMessage = true;
         [SerializeField] private bool autoScrollToBottomOnNewPrint = true;
         [SerializeField] private bool useResolutionWatcher = true;
+        [Header("Configs")]
+        [SerializeField] private bool dontDestroyOnLoad = true;
         [Header("Binding Config")]
         [SerializeField] InputAction _toggleConsoleAction;
         // [SerializeField] InputAction _autoCompleteConsoleAction;
@@ -65,24 +42,24 @@ namespace Machamy.DeveloperConsole
         public bool IsInitialized => _isInitialized;
         public bool IsOpen => _isOpen;
         public McConsole Console => McConsole.Instance;
-        
+
         /*
          * UI 관련
          */
         private VisualElement trueRoot = null;
         private VisualElement root = null;
         TextField textField = null;
-        
+
         ScrollView previewContainer = null;
         ScrollView historyContainer = null;
-        
+
         /*
          * 상태
          */
-        
+
         private bool _shouldScrollToBottom = false;
         public string CurrentInput => textField.value.TrimEnd();
-        
+
         /*
          * 자동완성 관련
          */
@@ -95,7 +72,7 @@ namespace Machamy.DeveloperConsole
         private List<string> _submittedCommands = new List<string>();
         private int _currentRecallIndex = -1;
         public IReadOnlyList<string> SubmittedCommands => _submittedCommands.AsReadOnly();
-        
+
         private void Reset()
         {
             consolePanel = this.gameObject;
@@ -117,7 +94,7 @@ namespace Machamy.DeveloperConsole
                 return;
             }
             _instance = this;
-            
+
             if (consolePanel == null)
             {
                 consolePanel = this.gameObject;
@@ -135,26 +112,26 @@ namespace Machamy.DeveloperConsole
                     LogEx.LogError("ConsoleUI: No UIDocument found!");
                     return;
                 }
-                
+
             }
-            
+
             Console.RegisterWindow(this);
-            
-            
+
+
             /*
              * UI 요소 찾기
              */
             root = trueRoot.Q<VisualElement>("Root");
             LogEx.Log($"ConsoleUI: {trueRoot}, {root}");
-            
-            
+
+
             textField = trueRoot.Q<TextField>("InputField");
             previewContainer = trueRoot.Q<ScrollView>("PreviewContainer");
             historyContainer = trueRoot.Q<ScrollView>("HistoryContainer");
             historyContainer.AddToClassList("history");
-            
+
             textField.value = "";
-            
+
             /*
              * Manipulator 설정
              */
@@ -165,7 +142,7 @@ namespace Machamy.DeveloperConsole
             var eastManipulator = new ResizeManipulator(resizeEast, root, ResizeEdge.East);
             var southManipulator = new ResizeManipulator(resizeSouth, root, ResizeEdge.South);
             var southEastManipulator = new ResizeManipulator(resizeSouthEast, root, ResizeEdge.SouthEast);
-            
+
             void SetResizeMinMaxSize(Vector2 min, Vector2 max)
             {
                 eastManipulator.MinSize = southManipulator.MinSize = southEastManipulator.MinSize = min;
@@ -174,7 +151,7 @@ namespace Machamy.DeveloperConsole
             }
             SetResizeMinMaxSize(minSize, maxSize);
             eastManipulator.ClampToParentBounds = southManipulator.ClampToParentBounds = southEastManipulator.ClampToParentBounds = true;
-            
+
             if(useResolutionWatcher)
             {
                 T AddOrGetComponent<T>(GameObject obj) where T : Component
@@ -201,17 +178,17 @@ namespace Machamy.DeveloperConsole
                     };
                 }
             }
-            
+
             resizeEast.AddManipulator(eastManipulator);
             resizeSouth.AddManipulator(southManipulator);
             resizeSouthEast.AddManipulator(southEastManipulator);
-            
+
             var topBar = trueRoot.Q<VisualElement>("TopBar");
             var dragManipulator = new DragManipulator(topBar, root);
             dragManipulator.ClampToParentBounds = true;
             dragManipulator.Padding = new RectOffset(5,5,5,5);
             topBar.AddManipulator(dragManipulator);
-            
+
             /*
              * 토글 단축키 설정
              */
@@ -230,8 +207,13 @@ namespace Machamy.DeveloperConsole
                     }
                 };
             }
-            
+
             _isInitialized = true;
+
+            if (dontDestroyOnLoad)
+            {
+                DontDestroyOnLoad(this.gameObject);
+            }
             Close();
             #endif
         }
@@ -240,10 +222,12 @@ namespace Machamy.DeveloperConsole
         {
             RegisterHandlers();
             textField.Focus();
+            McConsole.OnConsoleWindowToggled?.Invoke(true);
         }
         private void OnDisable()
         {
             UnregisterHandlers();
+            McConsole.OnConsoleWindowToggled?.Invoke(false);
         }
 
         private void LateUpdate()
@@ -270,28 +254,29 @@ namespace Machamy.DeveloperConsole
         private void RegisterHandlers()
         {
             LogEx.Log("RegisterHandlers");
-            
+
             textField.RegisterValueChangedCallback(OnTextChanged);
             textField.RegisterCallback<FocusOutEvent>(OnTextFieldUnfocused);
             textField.RegisterCallback<KeyDownEvent>(OnTextFieldKeyDown, TrickleDown.TrickleDown);
         }
-        
+
         private void UnregisterHandlers()
         {
             LogEx.Log("UnregisterHandlers");
-            textField.UnregisterValueChangedCallback(OnTextChanged);
-            textField.UnregisterCallback<FocusOutEvent>(OnTextFieldUnfocused);
-            textField.UnregisterCallback<KeyDownEvent>(OnTextFieldKeyDown, TrickleDown.TrickleDown);
+            if (textField != null)
+            {
+                textField.UnregisterValueChangedCallback(OnTextChanged);
+                textField.UnregisterCallback<FocusOutEvent>(OnTextFieldUnfocused);
+                textField.UnregisterCallback<KeyDownEvent>(OnTextFieldKeyDown, TrickleDown.TrickleDown);
+            }
+
         }
 
         public void Open()
         {
-            if (_isOpen) return;
             _isOpen = true;
             trueRoot.style.display = DisplayStyle.Flex;
-            Opened?.Invoke();
-            OpenStateChanged?.Invoke(true);
-            
+
             ScrollToBottom();
 
             textField.schedule.Execute(() =>
@@ -299,18 +284,15 @@ namespace Machamy.DeveloperConsole
                 if (!IsOpen) return;
                 textField.Focus();
                 OnTextChanged(CurrentInput);
-                
+
             }).ExecuteLater(5);
         }
 
         public void Close()
         {
-            if (!_isOpen) return;
             _isOpen = false;
             trueRoot.style.display = DisplayStyle.None;
             textField.Blur();
-            Closed?.Invoke();
-            OpenStateChanged?.Invoke(false);
         }
         public void Toggle()
         {
@@ -336,7 +318,7 @@ namespace Machamy.DeveloperConsole
                 _shouldScrollToBottom = true;
             }
         }
-        
+
         private void Message(MessageType type, string message, params string[] additionalClasses)
         {
             var label = new Label(message);
@@ -347,7 +329,7 @@ namespace Machamy.DeveloperConsole
             {
                 label.AddToClassList(cls);
             }
-            
+
             historyContainer.Add(label);
             historyContainer.ScrollTo(label);
             if (autoScrollToBottomOnNewMessage)
@@ -360,13 +342,13 @@ namespace Machamy.DeveloperConsole
         {
             Print(LogType.Log, message);
         }
-        
+
         public void Print(LogType type, string message)
         {
             if (!IsInitialized)
                 return;
             var label = new Label(message);
-            // label.styleSheets 
+            // label.styleSheets
             label.AddToClassList("log-line");
             switch (type)
             {
@@ -382,7 +364,7 @@ namespace Machamy.DeveloperConsole
                     label.AddToClassList("info");
                     break;
             }
-            
+
             historyContainer.Add(label);
             historyContainer.ScrollTo(label);
             if (autoScrollToBottomOnNewPrint)
@@ -400,7 +382,7 @@ namespace Machamy.DeveloperConsole
                 return;
             historyContainer.Clear();
         }
-        
+
         /// <summary>
         /// Scroll History to Bottom
         /// </summary>
@@ -410,7 +392,7 @@ namespace Machamy.DeveloperConsole
             Scroller scroller = scrollView.verticalScroller;
             scroller.value = scroller.highValue > 0 ? scroller.highValue : 0;
         }
-        
+
         /// <summary>
         /// Change ConsoleUI Opacity
         /// </summary>
@@ -419,7 +401,7 @@ namespace Machamy.DeveloperConsole
         {
             root.style.opacity = Mathf.Clamp01(opacity);
         }
-        
+
         /// <summary>
         /// Request AutoCompletion.
         /// If there are already suggestions, select the next one.
@@ -454,7 +436,7 @@ namespace Machamy.DeveloperConsole
             textField.selectIndex = textField.value.Length;
         }
 
-        
+
         /// <summary>
         /// Set Input Field Text
         /// </summary>
@@ -487,7 +469,7 @@ namespace Machamy.DeveloperConsole
             foreach (var suggestion in suggestions)
             {
                 var label = new Label(suggestion);
-                label.AddToClassList("suggest"); 
+                label.AddToClassList("suggest");
                 if (suggestion == _autoCompleter.GetCurrentSuggestion())
                 {
                     label.AddToClassList("selected");
@@ -510,17 +492,21 @@ namespace Machamy.DeveloperConsole
                 });
                 previewContainer.Add(label);
             }
-            
+
             if (previewContainer != null && selectedLabel != null)
             {
                 previewContainer.schedule.Execute(() =>
                 {
+                    if (!IsOpen || selectedLabel == null)
+                        return;
+                    if(selectedLabel.parent == null)
+                        return;
                     previewContainer.ScrollTo(selectedLabel);
                 });
             }
         }
 
-        
+
         private void Recall(int targetIndex)
         {
             if (targetIndex < 0 || targetIndex >= _submittedCommands.Count)
@@ -530,7 +516,7 @@ namespace Machamy.DeveloperConsole
             textField.cursorIndex = textField.value.Length;
             textField.selectIndex = textField.value.Length;
         }
-        
+
         /// <summary>
         /// Recall Previous Command from History
         /// If already at the oldest command, stay there.
@@ -551,7 +537,7 @@ namespace Machamy.DeveloperConsole
             }
             Recall(_currentRecallIndex);
         }
-        
+
         /// <summary>
         /// Recall Next Command from History
         /// </summary>
@@ -571,7 +557,7 @@ namespace Machamy.DeveloperConsole
             }
             Recall(_currentRecallIndex);
         }
-        
+
         /// <summary>
         /// Set Font Size
         /// </summary>
@@ -580,9 +566,9 @@ namespace Machamy.DeveloperConsole
         {
             if (!IsInitialized)
                 return;
-            
+
         }
-        
+
         /// <summary>
         /// Called when the user submits the input (e.g., presses Enter).
         /// </summary>
@@ -595,7 +581,7 @@ namespace Machamy.DeveloperConsole
             _autoCompleter.Clear();
             _wasAutoCompleteJustRequested = false;
             previewContainer.Clear();
-            
+
             Message(MessageType.Gray,$"> {input}");
             ExecuteCommand(input);
             _submittedCommands.Add(input);
@@ -607,7 +593,7 @@ namespace Machamy.DeveloperConsole
             }).ExecuteLater(5);
             _currentRecallIndex = -1;
         }
-        
+
         /// <inheritdoc cref="OnTextChanged(string)"/>
         private void OnTextChanged(ChangeEvent<string> input)
         {
@@ -636,14 +622,14 @@ namespace Machamy.DeveloperConsole
             // }
             UpdatePreviewContainer();
         }
-        
+
         /// <inheritdoc cref="OnTextFieldUnfocused()"/>
         private void OnTextFieldUnfocused(FocusOutEvent evt)
         {
             // LogEx.Log("TextField Unfocused");
             OnTextFieldUnfocused();
         }
-        
+
         /// <summary>
         /// Called when the input field loses focus.
         /// </summary>
@@ -652,7 +638,7 @@ namespace Machamy.DeveloperConsole
             // previewContainer.Clear();
             // _autoCompleter.Clear();
         }
-        
+
         private void OnTextFieldKeyDown(KeyDownEvent evt)
         {
             if (evt.keyCode == KeyCode.Tab)
@@ -683,11 +669,11 @@ namespace Machamy.DeveloperConsole
                 evt.StopImmediatePropagation();
                 FocusController focusController = textField.panel.focusController;
                 focusController.IgnoreEvent(evt);
-                
+
                 RecallNext();
             }
         }
-        
+
         private void OnToggleKeyPressed(InputAction.CallbackContext context)
         {
             Toggle();
@@ -705,13 +691,13 @@ namespace Machamy.DeveloperConsole
             {
                 McConsole.Print(type, $"Log of type {type}");
             }
-            
+
             foreach (var msgType in MessageType.Default.AllTypes)
             {
                 McConsole.Message(msgType, $"Message of type {msgType}");
             }
         }
-        
+
         [Preserve, ConsoleCommand("clear", "Clears the console window.")]
         private static void ClearCommand()
         {

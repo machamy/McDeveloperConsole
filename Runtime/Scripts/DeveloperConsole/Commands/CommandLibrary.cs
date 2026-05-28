@@ -1,12 +1,13 @@
-﻿
-using Machamy.Utils;
+
 using System;
 using System.Collections.Generic;
 using Machamy.DeveloperConsole.Attributes;
+using Machamy.DeveloperConsole.Commands;
+using Machamy.Utils;
 using UnityEngine;
 using UnityEngine.Scripting;
 
-namespace Machamy.DeveloperConsole.Commands
+namespace Machamy.DeveloperConsole
 {
     /// <summary>
     /// (eng) A static library that manages all console commands.<br/>
@@ -19,13 +20,27 @@ namespace Machamy.DeveloperConsole.Commands
         /// (eng) A dictionary that maps command names to their corresponding IConsoleCommand instances.<br/>
         /// (kor) 명령어 이름을 해당 IConsoleCommand 인스턴스에 매핑하는 사전입니다.
         /// </summary>
-        private static readonly SortedDictionary<string, IConsoleCommand> _commands = new SortedDictionary<string, IConsoleCommand>();
-        
-       
-  
+        private static readonly SortedDictionary<string, IConsoleCommand> _commands = new SortedDictionary<string, IConsoleCommand>(StringComparer.OrdinalIgnoreCase);
+#if MCDEVCONSOLE_USE_NGO
+        private static IConsoleRuntimeContext _runtimeContext;
+        private static IConsoleRemoteCommandExecutor _remoteCommandExecutor;
 
-        
-        
+        public static void SetRuntimeContext(IConsoleRuntimeContext runtimeContext)
+        {
+            _runtimeContext = runtimeContext;
+        }
+
+        public static void SetRemoteCommandExecutor(IConsoleRemoteCommandExecutor remoteCommandExecutor)
+        {
+            _remoteCommandExecutor = remoteCommandExecutor;
+        }
+#endif
+
+
+
+
+
+
         /// <summary>
         /// (eng) Registers a new console command.<br/>
         /// If a command with the same name already exists, it will be overwritten.<br/>
@@ -45,7 +60,7 @@ namespace Machamy.DeveloperConsole.Commands
             }
             _commands[command.Command] = command;
         }
-        
+
         /// <summary>
         /// (eng) Unregisters a console command by its name.<br/>
         /// If the command does not exist, a warning will be logged.<br/>
@@ -93,11 +108,72 @@ namespace Machamy.DeveloperConsole.Commands
         {
             return _commands.Values;
         }
-        
+
+#if MCDEVCONSOLE_USE_NGO
+        public static bool TryGetAvailableCommand(string commandName, out IConsoleCommand command)
+        {
+            if (TryGetCommand(commandName, out command) && IsCommandAvailable(command))
+            {
+                return true;
+            }
+
+            command = null;
+            return false;
+        }
+
+        public static IEnumerable<IConsoleCommand> GetAvailableCommands()
+        {
+            foreach (var command in _commands.Values)
+            {
+                if (IsCommandAvailable(command))
+                {
+                    yield return command;
+                }
+            }
+        }
+
+        public static bool TryRequestRemoteCommand(string input, IConsoleCommand command)
+        {
+            return _remoteCommandExecutor != null && _remoteCommandExecutor.CanRequestServerCommand(command) && _remoteCommandExecutor.RequestServerCommand(input);
+        }
+
+        public static ConsoleCommandScope GetCommandScope(IConsoleCommand command)
+        {
+            return command?.Scope ?? ConsoleCommandScope.Local;
+        }
+
+        public static bool IsCommandAvailable(IConsoleCommand command)
+        {
+            if (command == null)
+            {
+                return false;
+            }
+
+            if (_runtimeContext == null)
+            {
+                return GetCommandScope(command) == ConsoleCommandScope.Local;
+            }
+
+            switch (GetCommandScope(command))
+            {
+                case ConsoleCommandScope.Local:
+                    return true;
+                case ConsoleCommandScope.ClientOnly:
+                    return _runtimeContext.IsClient;
+                case ConsoleCommandScope.ServerOnly:
+                    return _runtimeContext.IsServer;
+                case ConsoleCommandScope.ClientToServer:
+                    return _runtimeContext.IsServer || (_runtimeContext.IsClient && _remoteCommandExecutor != null && _remoteCommandExecutor.CanRequestServerCommand(command));
+                default:
+                    return false;
+            }
+        }
+#endif
+
 
     #if !DO_NOT_USE_DEBUG_CONSOLE
         /// <summary>
-        /// (eng) 
+        /// (eng)
         /// </summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Initialize()
@@ -110,6 +186,26 @@ namespace Machamy.DeveloperConsole.Commands
             {
                 foreach (var type in assembly.GetTypes())
                 {
+                    var iConsoleCommandAttrs = type.GetCustomAttributes(typeof(ConsoleCommandClassAttribute), false);
+                    if (iConsoleCommandAttrs.Length > 0)
+                    {
+                        if (typeof(IConsoleCommand).IsAssignableFrom(type))
+                        {
+                            // IConsoleCommand 구현체인 경우, 인스턴스 생성 후 등록
+                            try
+                            {
+                                var instance = (IConsoleCommand)Activator.CreateInstance(type);
+                                RegisterCommand(instance);
+                            }
+                            catch (Exception ex)
+                            {
+                                LogEx.LogWarning($"Failed to create instance of console command class \"{type.FullName}\". Make sure it has a parameterless constructor. Exception: {ex}");
+                            }
+                        }
+
+                        continue;
+                    }
+
                     foreach (var method in type.GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic))
                     {
                         var attrs = method.GetCustomAttributes(typeof(ConsoleCommandAttribute), false);
@@ -119,13 +215,21 @@ namespace Machamy.DeveloperConsole.Commands
                             if(method.GetParameters().Length == 1 && method.GetParameters()[0].ParameterType == typeof(string[]))
                             {
                                 // RawReflectionCommand 생성
+#if MCDEVCONSOLE_USE_NGO
+                                var rawCommand = new RawReflectionCommand(attr.Command, attr.Description, method, attr.Signature, attr.Scope);
+#else
                                 var rawCommand = new RawReflectionCommand(attr.Command, attr.Description, method, attr.Signature);
+#endif
                                 if(attr.Arg0AutoComplete != null)
                                     rawCommand.SetArg0AutoComplete(attr.Arg0AutoComplete);
                                 RegisterCommand(rawCommand);
                             }else{
                                 // ReflectionCommand 생성
+#if MCDEVCONSOLE_USE_NGO
+                                bool success = ReflectionCommand.Create(attr.Command, attr.Description, method, attr.Signature, attr.Scope, out ReflectionCommand consoleCommand);
+#else
                                 bool success = ReflectionCommand.Create(attr.Command, attr.Description, method, attr.Signature, out ReflectionCommand consoleCommand);
+#endif
                                 if (success)
                                 {
                                     if(attr.Arg0AutoComplete != null)
@@ -137,13 +241,13 @@ namespace Machamy.DeveloperConsole.Commands
                                     LogEx.LogWarning($"Failed to create console command for method \"{type.FullName}.{method.Name}\". \n Make sure the method is static and all parameter types are supported.");
                                 }
                             }
-                            
+
                         }
                     }
                 }
             }
         }
     #endif
-        
+
     }
 }

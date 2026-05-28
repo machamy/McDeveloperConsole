@@ -28,7 +28,11 @@ namespace Machamy.DeveloperConsole
             {
                 if(args.Length == 0)
                 {
+#if MCDEVCONSOLE_USE_NGO
+                    var commands = CommandLibrary.GetAvailableCommands();
+#else
                     var commands = CommandLibrary.GetAllCommands();
+#endif
                     McConsole.MessageInfo("Available Commands:");
                     foreach (var command in commands)
                     {
@@ -39,7 +43,11 @@ namespace Machamy.DeveloperConsole
                 else
                 {
                     string commandName = args[0];
+#if MCDEVCONSOLE_USE_NGO
+                    if (CommandLibrary.TryGetAvailableCommand(commandName, out var command))
+#else
                     if (CommandLibrary.TryGetCommand(commandName, out var command))
+#endif
                     {
                         McConsole.MessageInfo( $"Command: {command.Signature}");
                         McConsole.MessageDefault($"Description: {command.Description}");
@@ -58,7 +66,11 @@ namespace Machamy.DeveloperConsole
                 if (args.Length == 0)
                 {
                     // 모든 명령어 제안
+#if MCDEVCONSOLE_USE_NGO
+                    foreach (var cmd in CommandLibrary.GetAvailableCommands())
+#else
                     foreach (var cmd in CommandLibrary.GetAllCommands())
+#endif
                     {
                         suggestions.Add(cmd.Command);
                     }
@@ -70,7 +82,11 @@ namespace Machamy.DeveloperConsole
                 if (argIndex == 0)
                 {
                     // 첫 번째 인자라면, 등록된 명령어들 중에서
+#if MCDEVCONSOLE_USE_NGO
+                    foreach (var cmd in CommandLibrary.GetAvailableCommands())
+#else
                     foreach (var cmd in CommandLibrary.GetAllCommands())
+#endif
                     {
                         if (cmd.Command.StartsWith(currentArg, StringComparison.OrdinalIgnoreCase))
                             suggestions.Add(cmd.Command);
@@ -101,7 +117,11 @@ namespace Machamy.DeveloperConsole
             {
                 if(args.Length == 0)
                 {
+#if MCDEVCONSOLE_USE_NGO
+                    var commands = CommandLibrary.GetAvailableCommands();
+#else
                     var commands = CommandLibrary.GetAllCommands();
+#endif
                     McConsole.MessageInfo("Available Commands:");
                     foreach (var command in commands)
                     {
@@ -112,7 +132,11 @@ namespace Machamy.DeveloperConsole
                 else
                 {
                     string commandName = args[0];
+#if MCDEVCONSOLE_USE_NGO
+                    if (CommandLibrary.TryGetAvailableCommand(commandName, out var command))
+#else
                     if (CommandLibrary.TryGetCommand(commandName, out var command))
+#endif
                     {
                         McConsole.MessageInfo( $"Command: {command.Signature}");
                         McConsole.MessageDefault($"Description: {command.Description}");
@@ -129,7 +153,11 @@ namespace Machamy.DeveloperConsole
                 if (args.Length == 0)
                 {
                     // 모든 명령어 제안
+#if MCDEVCONSOLE_USE_NGO
+                    foreach (var cmd in CommandLibrary.GetAvailableCommands())
+#else
                     foreach (var cmd in CommandLibrary.GetAllCommands())
+#endif
                     {
                         suggestions.Add(cmd.Command);
                     }
@@ -141,7 +169,11 @@ namespace Machamy.DeveloperConsole
                 if (argIndex == 0)
                 {
                     // 첫 번째 인자라면, 등록된 명령어들 중에서
+#if MCDEVCONSOLE_USE_NGO
+                    foreach (var cmd in CommandLibrary.GetAvailableCommands())
+#else
                     foreach (var cmd in CommandLibrary.GetAllCommands())
+#endif
                     {
                         if (cmd.Command.StartsWith(currentArg, StringComparison.OrdinalIgnoreCase))
                             suggestions.Add(cmd.Command);

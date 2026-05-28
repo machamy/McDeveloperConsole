@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+#if MCDEVCONSOLE_USE_NGO
+using Machamy.DeveloperConsole;
+#endif
 
 namespace Machamy.DeveloperConsole.Commands
 {
@@ -20,13 +23,23 @@ namespace Machamy.DeveloperConsole.Commands
         
         private string[] _arg0AutoComplete;
         public string[] Arg0AutoComplete => _arg0AutoComplete;
+#if MCDEVCONSOLE_USE_NGO
+        public ConsoleCommandScope Scope { get; }
+#endif
         
+#if MCDEVCONSOLE_USE_NGO
+        public RawReflectionCommand(string commandName, string description, System.Reflection.MethodInfo method, string signature = null, ConsoleCommandScope scope = ConsoleCommandScope.Local)
+#else
         public RawReflectionCommand(string commandName, string description, System.Reflection.MethodInfo method, string signature = null)
+#endif
         {
             Command = commandName;
             Description = description;
             _method = method;
             _signature = signature ?? $"{commandName} <string[] args>";
+#if MCDEVCONSOLE_USE_NGO
+            Scope = scope;
+#endif
         }
         
         public void AutoComplete(Span<string> args, ref List<string> suggestions)

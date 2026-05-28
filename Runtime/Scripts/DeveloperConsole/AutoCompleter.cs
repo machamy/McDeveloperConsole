@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using Machamy.DeveloperConsole.Commands;
 
 namespace Machamy.DeveloperConsole
@@ -14,6 +13,7 @@ namespace Machamy.DeveloperConsole
         private string _chachedInput = "I_AM_GROOT";
         private List<string> _cachedSuggestions = new List<string>();
         private int _currentIndex = -1;
+        private ConsoleCompletionParseResult _completionParse;
         
         private int _completTarget = -1; // 0: command part, 1...: arg part
         
@@ -184,15 +184,15 @@ namespace Machamy.DeveloperConsole
                 return _cachedSuggestions[index];
             }else if (_completTarget > 0)
             {
-                string[] parts = _chachedInput.Split(' ');
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < _completTarget; i++)
+                IReadOnlyList<ConsoleToken> tokens = _completionParse.Tokens;
+                if (tokens == null || tokens.Count == 0)
                 {
-                    sb.Append(parts[i]);
-                    sb.Append(' ');
+                    return ConsoleCommandTokenizer.QuoteArgument(_cachedSuggestions[index]);
                 }
-                sb.Append(_cachedSuggestions[index]);
-                return sb.ToString();
+
+                ConsoleToken targetToken = tokens[_completionParse.CurrentTokenIndex];
+                string suggestion = ConsoleCommandTokenizer.QuoteArgument(_cachedSuggestions[index]);
+                return _chachedInput[..targetToken.StartIndex] + suggestion + _chachedInput[targetToken.EndIndex..];
             }
             else
             {
@@ -257,41 +257,69 @@ namespace Machamy.DeveloperConsole
                 suggestions = new List<string>();
             else
                 suggestions.Clear();
-            // TODO : 배열 복사가 빈번하게 일어남
-            string[] parts = input.Split(' ');
-            if (parts.Length == 0)
+            _completionParse = ConsoleCommandTokenizer.TokenizeForCompletion(input);
+            IReadOnlyList<ConsoleToken> tokens = _completionParse.Tokens;
+            if (tokens.Count == 0)
             {
                 return;
             }
-            string commandPart = parts[0];
-            Span<string> argsPart = new Span<string>(parts, 1, parts.Length - 1);
-            for (int i = 1; i < parts.Length; i++)
-                argsPart[i - 1] = parts[i];
-            
-            _completTarget = argsPart.Length;
+
+            string commandPart = tokens[0].Value;
+            _completTarget = _completionParse.CurrentTokenIndex;
 
             // 명령어부분
-            if (_completTarget == 0)
+            if (_completionParse.IsCommandToken)
             {
-                foreach (var cmd in CommandLibrary.GetAllCommands())
-                {
-                    if (cmd.Command.StartsWith(commandPart))
-                    {
-                        suggestions.Add(cmd.Command);
-                    }
-                }
+#if MCDEVCONSOLE_USE_NGO
+                AddCommandSuggestions(CommandLibrary.GetAvailableCommands(), commandPart, suggestions);
+#else
+                AddCommandSuggestions(CommandLibrary.GetAllCommands(), commandPart, suggestions);
+#endif
                 return;
             }
             
             // 인자부분
             IConsoleCommand command;
+#if MCDEVCONSOLE_USE_NGO
+            if (!CommandLibrary.TryGetAvailableCommand(commandPart, out command))
+#else
             if (!CommandLibrary.TryGetCommand(commandPart, out command))
+#endif
             {
                 return;
             }
+
+            int argCount = Math.Max(0, tokens.Count - 1);
+            string[] args = new string[argCount];
+            for (int i = 1; i < tokens.Count; i++)
+            {
+                args[i - 1] = tokens[i].Value;
+            }
+
+            Span<string> argsPart = args;
             command.AutoComplete(argsPart, ref suggestions);
 
             return;
+        }
+
+        private static void AddCommandSuggestions(IEnumerable<IConsoleCommand> commands, string commandPart, List<string> suggestions)
+        {
+            foreach (var cmd in commands)
+            {
+                if (cmd.Command.StartsWith(commandPart, StringComparison.OrdinalIgnoreCase))
+                {
+                    suggestions.Add(cmd.Command);
+                }
+            }
+
+            foreach (var cmd in commands)
+            {
+                if (!cmd.Command.StartsWith(commandPart, StringComparison.OrdinalIgnoreCase) &&
+                    cmd.Command.IndexOf(commandPart, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    suggestions.Add(cmd.Command);
+                }
+            }
         }
         
     }
