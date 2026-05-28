@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using Machamy.Attributes;
 using Machamy.DeveloperConsole.Attributes;
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Scripting;
@@ -19,11 +20,36 @@ namespace Machamy.DeveloperConsole
     {
         private static ConsoleUI _instance;
         public static ConsoleUI Instance => _instance;
+        /// <summary>
+        /// True when the registered console UI is currently open.
+        /// </summary>
+        public static bool IsConsoleOpen => _instance != null && _instance.IsOpen;
+        /// <summary>
+        /// Raised after the console changes from closed to open.
+        /// </summary>
+        public static event Action Opened;
+        /// <summary>
+        /// Raised after the console changes from open to closed.
+        /// </summary>
+        public static event Action Closed;
+        /// <summary>
+        /// Raised after the console open state changes. The argument is true when opened.
+        /// </summary>
+        public static event Action<bool> OpenStateChanged;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStaticState()
+        {
+            _instance = null;
+            Opened = null;
+            Closed = null;
+            OpenStateChanged = null;
+        }
         /*
          *  Default Variables
          */
         [Header("Default Variables")]
-        [SerializeField] private GameObject consolePanel;
+        [SerializeField][ReadOnly] private GameObject consolePanel;
         [SerializeField, VisibleOnly] private bool _isInitialized = false;
         [SerializeField] private bool _isOpen = false;
         [SerializeField] private bool _useAutoComplete = false;
@@ -260,8 +286,11 @@ namespace Machamy.DeveloperConsole
 
         public void Open()
         {
+            if (_isOpen) return;
             _isOpen = true;
             trueRoot.style.display = DisplayStyle.Flex;
+            Opened?.Invoke();
+            OpenStateChanged?.Invoke(true);
             
             ScrollToBottom();
 
@@ -276,9 +305,12 @@ namespace Machamy.DeveloperConsole
 
         public void Close()
         {
+            if (!_isOpen) return;
             _isOpen = false;
             trueRoot.style.display = DisplayStyle.None;
             textField.Blur();
+            Closed?.Invoke();
+            OpenStateChanged?.Invoke(false);
         }
         public void Toggle()
         {
