@@ -11,6 +11,7 @@ Unity UI Toolkit 기반의 런타임 개발자 콘솔 패키지입니다. 게임
 - 런타임에서 열고 닫을 수 있는 인게임 개발자 콘솔
 - Unity `Debug.Log`, `Debug.LogWarning`, `Debug.LogError`, `Debug.LogException` 출력 연동
 - `[ConsoleCommand]` 기반 정적 메서드 자동 등록
+- `ConsoleCommandClass`처럼 명령 전용 정적 클래스로 커맨드 묶음 관리
 - `IConsoleCommand`, `SimpleCommand`, `RawCommand` 기반 수동 명령 등록
 - 명령어와 첫 번째 인자 자동완성
 - 입력 히스토리 탐색
@@ -101,6 +102,46 @@ public static class GameCommands
 private static void EchoRaw(string[] args)
 {
     McConsole.MessageDefault(string.Join(" ", args));
+}
+```
+
+### ConsoleCommandClass 예제
+
+여러 커맨드를 한 파일에 모아 관리하려면 명령 전용 정적 클래스를 만들고, 각 정적 메서드에 `[ConsoleCommand]`를 붙이면 됩니다. 클래스 이름은 자유롭게 정할 수 있으며, 아래처럼 `ConsoleCommandClass`로 두면 프로젝트 안의 콘솔 명령 모음임을 명확히 드러낼 수 있습니다.
+
+```csharp
+using Machamy.DeveloperConsole;
+using Machamy.DeveloperConsole.Attributes;
+using UnityEngine;
+
+public static class ConsoleCommandClass
+{
+    [ConsoleCommand("god", "무적 모드를 설정합니다.", "god <true|false>", new[] { "true", "false" })]
+    private static void SetGodMode(bool enabled)
+    {
+        McConsole.MessageInfo($"God mode: {enabled}");
+    }
+
+    [ConsoleCommand("teleport", "플레이어를 지정한 좌표로 이동합니다.", "teleport <x> <y> <z>")]
+    private static void Teleport(float x, float y, float z)
+    {
+        var position = new Vector3(x, y, z);
+
+        // 실제 프로젝트에서는 플레이어 참조를 찾아 position을 적용합니다.
+        McConsole.MessageSuccess($"Teleport to {position}");
+    }
+
+    [ConsoleCommand("give", "아이템을 지급합니다.", "give <itemId> <count>", new[] { "potion", "coin", "key" })]
+    private static void GiveItem(string itemId, int count)
+    {
+        McConsole.MessageSuccess($"Give {itemId} x{count}");
+    }
+
+    [ConsoleCommand("say", "입력한 문장을 그대로 출력합니다.", "say <message>")]
+    private static void Say(string[] args)
+    {
+        McConsole.MessageDefault(string.Join(" ", args));
+    }
 }
 ```
 
