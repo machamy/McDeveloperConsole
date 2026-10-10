@@ -1,12 +1,12 @@
 {
   "name": "com.machamy.developerconsole",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "displayName": "Mc Developer Console",
   "description": "A UI Toolkit based in-game developer console for Unity with command registration, auto-completion, log integration, and optional Netcode for GameObjects support.",
   "unity": "2022.3",
   "license": "MIT",
   "dependencies": {
-    "com.unity.inputsystem": "1.6.0",
+    "com.unity.inputsystem": "1.18.0",
     "com.unity.ui.builder": "1.0.0",
     "com.unity.ugui": "1.0.0"
   },

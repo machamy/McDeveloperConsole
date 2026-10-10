@@ -14,6 +14,8 @@ namespace Machamy.DeveloperConsole
         private const string CapabilityMessageName = "McConsole.Capability";
         private const string CommandRequestMessageName = "McConsole.CommandRequest";
         private const string CommandResultMessageName = "McConsole.CommandResult";
+        private const string PingRequestMessageName = "McConsole.PingRequest";
+        private const string PingResultMessageName = "McConsole.PingResult";
 
         [SerializeField] private bool allowClientToServerCommandsInEditor = true;
         [SerializeField] private bool allowClientToServerCommandsInDevelopmentBuild = true;
@@ -32,6 +34,10 @@ namespace Machamy.DeveloperConsole
         private static Coroutine _registerCoroutine;
         private bool _handlersRegistered;
         private bool _networkCallbacksRegistered;
+
+        // ping 왕복 측정용: 시퀀스 id → 전송 시각(realtime). 응답이 오면 경과 ms를 계산해 출력한다.
+        private uint _pingSequence;
+        private readonly Dictionary<uint, double> _pendingPings = new();
 
         public bool IsClient => NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient;
         public bool IsServer => NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
@@ -80,6 +86,30 @@ namespace Machamy.DeveloperConsole
             CommandLibrary.SetRuntimeContext(this);
             CommandLibrary.SetRemoteCommandExecutor(this);
             McConsole.SetResponseDispatcher(this);
+            McConsole.SetNetworkPingHandler(HandleConsolePingRequested);
+            CheatPolicy.PermissionChanged += HandleCheatPermissionChanged;
+        }
+
+        // 코어(McDeveloperConsole.asmdef)는 넷코드 어셈블리를 참조할 수 없으므로,
+        // 핑 측정과 치트-전송권한 동기화를 어댑터가 훅/이벤트로 받아 처리한다.
+
+        // 'ping'/'net.serverPing'의 실제 왕복 측정 위임. 연결돼 있으면 핑 전송 후 true(코어는 출력 안 함),
+        // 비연결이면 false(코어가 "Pong!" 응답성 체크).
+        private bool HandleConsolePingRequested()
+        {
+            if (!IsClient && !IsServer)
+            {
+                return false;
+            }
+
+            RequestPing();
+            return true;
+        }
+
+        // 치트 허용 범위가 바뀌면 클라→서버 릴레이 전송 권한을 맞춘다(All일 때만 허용).
+        private void HandleCheatPermissionChanged(CheatPermission permission)
+        {
+            AllowClientToServerCommands = permission == CheatPermission.All;
         }
 
         private void OnEnable()
@@ -119,6 +149,8 @@ namespace Machamy.DeveloperConsole
             {
                 Instance = null;
                 McConsole.SetResponseDispatcher(null);
+                McConsole.SetNetworkPingHandler(null);
+                CheatPolicy.PermissionChanged -= HandleCheatPermissionChanged;
             }
         }
 
@@ -215,9 +247,13 @@ namespace Machamy.DeveloperConsole
             customMessagingManager.UnregisterNamedMessageHandler(CapabilityMessageName);
             customMessagingManager.UnregisterNamedMessageHandler(CommandRequestMessageName);
             customMessagingManager.UnregisterNamedMessageHandler(CommandResultMessageName);
+            customMessagingManager.UnregisterNamedMessageHandler(PingRequestMessageName);
+            customMessagingManager.UnregisterNamedMessageHandler(PingResultMessageName);
             customMessagingManager.RegisterNamedMessageHandler(CapabilityMessageName, HandleCapabilityMessage);
             customMessagingManager.RegisterNamedMessageHandler(CommandRequestMessageName, HandleCommandRequestMessage);
             customMessagingManager.RegisterNamedMessageHandler(CommandResultMessageName, HandleCommandResultMessage);
+            customMessagingManager.RegisterNamedMessageHandler(PingRequestMessageName, HandlePingRequestMessage);
+            customMessagingManager.RegisterNamedMessageHandler(PingResultMessageName, HandlePingResultMessage);
             networkManager.OnClientConnectedCallback -= HandleClientConnected;
             networkManager.OnClientConnectedCallback += HandleClientConnected;
 
@@ -239,6 +275,8 @@ namespace Machamy.DeveloperConsole
                 customMessagingManager.UnregisterNamedMessageHandler(CapabilityMessageName);
                 customMessagingManager.UnregisterNamedMessageHandler(CommandRequestMessageName);
                 customMessagingManager.UnregisterNamedMessageHandler(CommandResultMessageName);
+                customMessagingManager.UnregisterNamedMessageHandler(PingRequestMessageName);
+                customMessagingManager.UnregisterNamedMessageHandler(PingResultMessageName);
             }
 
             if (networkManager != null)
@@ -300,6 +338,8 @@ namespace Machamy.DeveloperConsole
         private void HandleServerStopped(bool isHost)
         {
             UnregisterNetworkHandlers();
+            // 세션 종료 시 치트 허용을 Off로 되돌려, 다음 세션이 항상 잠긴 상태로 시작하게 한다.
+            CheatPolicy.SetPermission(CheatPermission.Off);
         }
 
         private void HandleClientStarted()
@@ -408,6 +448,13 @@ namespace Machamy.DeveloperConsole
                 return false;
             }
 
+            // 서버측 치트 게이트(방어선): 원격 클라가 보낸 치트 명령은 권한(allowcheat all)이 있을 때만 실행.
+            if (command.IsCheat && !CommandLibrary.IsCheatAllowed(isRemote: true))
+            {
+                resultMessage = "치트 명령이 허용되지 않았습니다. (호스트: allowcheat all)";
+                return false;
+            }
+
             try
             {
                 string[] args = new string[tokens.Count - 1];
@@ -497,6 +544,89 @@ namespace Machamy.DeveloperConsole
             {
                 McConsole.MessageError(message);
             }
+        }
+
+        /// <summary>
+        /// 서버까지의 왕복 지연(ms)을 측정해 콘솔에 출력한다(클라 전용 측정).
+        /// 호스트(=서버 로컬)는 네트워크 왕복이 없으므로 즉시 0ms를 출력하고, 미연결이면 에러를 낸다.
+        /// </summary>
+        public void RequestPing()
+        {
+            if (NetworkManager.Singleton == null || !IsClient)
+            {
+                if (IsServer)
+                {
+                    McConsole.MessageSuccess("Ping: 0.0 ms (호스트=서버 로컬)");
+                    return;
+                }
+                McConsole.MessageError("핑은 네트워크에 연결된 상태에서만 사용할 수 있습니다.");
+                return;
+            }
+
+            // 호스트(서버이자 클라)는 자기 자신으로의 왕복이 의미 없으므로 로컬로 처리.
+            if (IsServer)
+            {
+                McConsole.MessageSuccess("Ping: 0.0 ms (호스트=서버 로컬)");
+                return;
+            }
+
+            var customMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
+            if (customMessagingManager == null)
+            {
+                McConsole.MessageError("Network console messaging is not available.");
+                return;
+            }
+
+            uint seq = unchecked(++_pingSequence);
+            // 응답이 끝내 안 오는 비정상 누적을 막는 단순 안전장치.
+            if (_pendingPings.Count > 64)
+            {
+                _pendingPings.Clear();
+            }
+            _pendingPings[seq] = Time.realtimeSinceStartupAsDouble;
+
+            using var writer = new FastBufferWriter(sizeof(uint), Unity.Collections.Allocator.Temp);
+            writer.WriteValueSafe(seq);
+            customMessagingManager.SendNamedMessage(PingRequestMessageName, NetworkManager.ServerClientId, writer);
+        }
+
+        // 서버: 클라가 보낸 ping 요청의 시퀀스를 그대로 echo해서 돌려준다.
+        private void HandlePingRequestMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (!IsServer)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out uint seq);
+            var customMessagingManager = NetworkManager.Singleton?.CustomMessagingManager;
+            if (customMessagingManager == null)
+            {
+                return;
+            }
+
+            using var writer = new FastBufferWriter(sizeof(uint), Unity.Collections.Allocator.Temp);
+            writer.WriteValueSafe(seq);
+            customMessagingManager.SendNamedMessage(PingResultMessageName, senderClientId, writer);
+        }
+
+        // 클라: echo된 시퀀스로 전송 시각을 찾아 경과 ms를 계산해 출력한다.
+        private void HandlePingResultMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (!IsMessageFromServer(senderClientId))
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out uint seq);
+            if (!_pendingPings.TryGetValue(seq, out double sentAt))
+            {
+                return; // 이미 정리됐거나 알 수 없는 응답 → 무시.
+            }
+
+            _pendingPings.Remove(seq);
+            double ms = (Time.realtimeSinceStartupAsDouble - sentAt) * 1000.0;
+            McConsole.MessageSuccess($"Ping: {ms:0.0} ms (서버 왕복)");
         }
 
         private static int GetStringWriteSize(string value)

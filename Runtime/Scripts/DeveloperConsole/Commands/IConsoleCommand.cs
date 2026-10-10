@@ -33,6 +33,17 @@ namespace Machamy.DeveloperConsole.Commands
 #if MCDEVCONSOLE_USE_NGO
         ConsoleCommandScope Scope => ConsoleCommandScope.Local;
 #endif
+        /// <summary>
+        /// (kor) 치트/개발 명령 여부. true면 권한(allowcheat)이 없을 때 자동완성과 실행에서 모두 제외된다.
+        /// NGO에선 ClientToServer(서버 권위 실행) 명령을 기본 치트로 간주하고, 비NGO에선 기본 false.
+        /// 필요하면 명령에서 개별 override (예: 조회 전용 명령은 false).
+        /// </summary>
+        bool IsCheat =>
+#if MCDEVCONSOLE_USE_NGO
+            Scope == ConsoleCommandScope.ClientToServer;
+#else
+            false;
+#endif
         void Execute(string[] args);
         
         /// <summary>

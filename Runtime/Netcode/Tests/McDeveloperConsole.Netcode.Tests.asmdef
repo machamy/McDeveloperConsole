@@ -1,0 +1,32 @@
+{
+    "name": "McDeveloperConsole.Netcode.Tests",
+    "rootNamespace": "",
+    "references": [
+        "Unity.Networking.Transport",
+        "McDeveloperConsole",
+        "McDeveloperConsole.Netcode",
+        "Unity.Netcode.Runtime",
+        "Unity.Collections",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "MCDEVCONSOLE_USE_NGO"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.netcode.gameobjects",
+            "expression": "",
+            "define": "MCDEVCONSOLE_USE_NGO"
+        }
+    ],
+    "noEngineReferences": false
+}

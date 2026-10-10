@@ -116,6 +116,18 @@ namespace Machamy.DeveloperConsole
             _responseDispatcher = responseDispatcher;
         }
 
+        // 네트워크 핑 핸들러(넷코드 어댑터가 주입). 연결돼 있으면 서버 왕복 핑을 보내고 true, 아니면 false.
+        // 코어는 넷코드 어셈블리를 참조할 수 없으므로 이 훅으로 위임한다(SetResponseDispatcher와 동일 패턴).
+        private static Func<bool> _networkPingHandler;
+        public static void SetNetworkPingHandler(Func<bool> handler)
+        {
+            _networkPingHandler = handler;
+        }
+        public static bool TryNetworkPing()
+        {
+            return _networkPingHandler != null && _networkPingHandler();
+        }
+
         public static IDisposable BeginResponseCapture(ConsoleResponseTarget target, List<ConsoleOutputMessage> outputMessages)
         {
             if (!target.IsValid)
@@ -275,6 +287,13 @@ namespace Machamy.DeveloperConsole
                         return true;
                     }
 #endif
+                    // 치트 명령 게이트(로컬/단독 실행 경로). NGO에선 위 TryGetAvailableCommand가 이미 거르지만,
+                    // 비NGO 경로(TryGetCommand)와 호스트 로컬 실행을 위해 여기서도 한 번 더 확인한다.
+                    if (command.IsCheat && !CheatPolicy.IsCheatAllowed(isRemote: false))
+                    {
+                        Message(MessageType.Error, "치트가 꺼져 있습니다. (allowcheat host / allowcheat all)");
+                        return false;
+                    }
                     command.Execute(args);
                 }
                 catch (Exception ex)

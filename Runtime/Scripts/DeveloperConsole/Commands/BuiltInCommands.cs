@@ -108,8 +108,17 @@ namespace Machamy.DeveloperConsole
              */
             ping = new SimpleCommand(
                 "ping",
-                "Checks the responsiveness of the console.",
-                () => McConsole.Print("Pong!")
+                "서버까지의 왕복 지연(ms)을 출력합니다. (미연결/비네트워크면 콘솔 응답성 체크)",
+                () =>
+                {
+                    // 네트워크 연결 시 실제 왕복 ms 측정(호스트는 0ms 로컬). 어댑터는 넷코드 어셈블리에 있으므로
+                    // 코어는 McConsole.TryNetworkPing() 훅으로 위임한다. 미연결/비네트워크면 단순 응답성 체크.
+                    if (McConsole.TryNetworkPing())
+                    {
+                        return;
+                    }
+                    McConsole.Print("Pong!");
+                }
             );
             
             help2Command = new RawCommand("help2", "Provides help information for commands. (RawCommand version)", "help2 [command]",
