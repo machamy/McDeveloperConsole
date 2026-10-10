@@ -142,9 +142,22 @@ namespace Machamy.DeveloperConsole
             return command?.Scope ?? ConsoleCommandScope.Local;
         }
 
+        // 치트 권한은 패키지 소유 CheatPolicy가 결정한다. isRemote=원격 클라가 보낸 명령인지.
+        public static bool IsCheatAllowed(bool isRemote) => CheatPolicy.IsCheatAllowed(isRemote);
+
+        // 호스트(서버)이거나 비네트워크 단독 환경이면 true. allowcheat 등 호스트 전용/로컬 권한 판정에 사용.
+        public static bool IsLocalAuthority => _runtimeContext == null || _runtimeContext.IsServer;
+
         public static bool IsCommandAvailable(IConsoleCommand command)
         {
             if (command == null)
+            {
+                return false;
+            }
+
+            // 치트 명령 게이트: 호스트/단독 로컬에서는 권한으로 직접 막는다(자동완성/실행에서 제외).
+            // 클라(원격)는 아래 ClientToServer scope 판정(CanRequestServerCommand=서버 전송 권한)으로 게이트된다.
+            if (command.IsCheat && IsLocalAuthority && !CheatPolicy.IsCheatAllowed(isRemote: false))
             {
                 return false;
             }

@@ -281,7 +281,7 @@ bool isOpen = ConsoleUI.Instance.IsOpen;
 string currentInput = ConsoleUI.Instance.CurrentInput;
 ```
 
-콘솔 창의 active 상태 변화를 감지해야 하면 `McConsole.OnConsoleWindowToggled`를 사용할 수 있습니다. 이 hook은 `ConsoleUI.OnEnable`/`OnDisable`에서 호출됩니다.
+콘솔 창의 열림/닫힘 변화를 감지해야 하면 `McConsole.OnConsoleWindowToggled`를 사용할 수 있습니다. 이 hook은 `ConsoleUI.Open()`/`Close()`에서 호출되며, 콘솔이 열린 상태로 컴포넌트가 활성/비활성될 때(`OnEnable`/`OnDisable`)도 호출됩니다.
 
 ```csharp
 using Machamy.DeveloperConsole;

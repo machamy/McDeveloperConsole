@@ -222,12 +222,18 @@ namespace Machamy.DeveloperConsole
         {
             RegisterHandlers();
             textField.Focus();
-            McConsole.OnConsoleWindowToggled?.Invoke(true);
+            if (_isOpen)
+            {
+                McConsole.OnConsoleWindowToggled?.Invoke(true);
+            }
         }
         private void OnDisable()
         {
             UnregisterHandlers();
-            McConsole.OnConsoleWindowToggled?.Invoke(false);
+            if (_isOpen)
+            {
+                McConsole.OnConsoleWindowToggled?.Invoke(false);
+            }
         }
 
         private void LateUpdate()
@@ -274,8 +280,14 @@ namespace Machamy.DeveloperConsole
 
         public void Open()
         {
+            bool wasOpen = _isOpen;
             _isOpen = true;
             trueRoot.style.display = DisplayStyle.Flex;
+
+            if (!wasOpen)
+            {
+                McConsole.OnConsoleWindowToggled?.Invoke(true);
+            }
 
             ScrollToBottom();
 
@@ -290,9 +302,15 @@ namespace Machamy.DeveloperConsole
 
         public void Close()
         {
+            bool wasOpen = _isOpen;
             _isOpen = false;
             trueRoot.style.display = DisplayStyle.None;
             textField.Blur();
+
+            if (wasOpen)
+            {
+                McConsole.OnConsoleWindowToggled?.Invoke(false);
+            }
         }
         public void Toggle()
         {

@@ -143,13 +143,21 @@ namespace Machamy.ConsoleCommands.Netcode
     public sealed class NetServerPingConsoleCommand : IConsoleCommand
     {
         public string Command => "net.serverPing";
-        public string Description => "Requests a server-side ping from a client.";
+        public bool IsCheat => false; // 진단용 핑 → 치트 아님(항상 사용 가능)
+        public string Description => "Measures round-trip latency to the server and prints it in ms.";
         public string Signature => "net.serverPing";
-        public ConsoleCommandScope Scope => ConsoleCommandScope.ClientToServer;
+        // Local: 클라 로컬에서 실행해 전용 ping 메시지로 직접 왕복(ms)을 측정한다(명령 릴레이 X).
+        public ConsoleCommandScope Scope => ConsoleCommandScope.Local;
 
         public void Execute(string[] args)
         {
-            McConsole.MessageInfo("Server pong.");
+            if (McConsoleNetcodeAdapter.Instance == null)
+            {
+                McConsole.MessageError("McConsoleNetcodeAdapter is not available.");
+                return;
+            }
+
+            McConsoleNetcodeAdapter.Instance.RequestPing();
         }
     }
 }
